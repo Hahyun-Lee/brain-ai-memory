@@ -1,0 +1,85 @@
+{
+  "artifact_sha256": {
+    "events_jsonl": "30851b48ade6ada04600ce9ddf5d43b4d978df0666c5ea6e6a6b2d73cff0d659",
+    "predictions_jsonl": "e1a1f0465ca9327e19e49e3a4dde35f0f6b545daee05142740943e48e456bb7b",
+    "prompt_txt": "4604ded95e6d3d8af2f7a0bf10d6e286a99f5167431e8df8315d40e2903a0bff",
+    "retrieval_jsonl": "48f18d027cfa2117575d9ca66bc6536c5e1fd1e2aa6b43d78b1d14592147f006",
+    "stderr_log": "077112061e80e6963e644959cf9133aa3d295dea2f4ceb11484088e3cef32ef9",
+    "stdout_log": "7d6809b7659b2004439ceb3ab81d0e5f928e94a93233b13efaded4e1db3abce9"
+  },
+  "artifacts": {
+    "events_jsonl": "events.jsonl",
+    "predictions_jsonl": "predictions.jsonl",
+    "prompt_txt": "prompt.txt",
+    "retrieval_jsonl": "retrieval.jsonl",
+    "stderr_log": "stderr.log",
+    "stdout_log": "stdout.log"
+  },
+  "benchmark": {
+    "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "expected_cases": 500,
+    "name": "LongMemEval",
+    "split": "all-items",
+    "version": "longmemeval_s_cleaned.json"
+  },
+  "comparison_id": "longmemeval-retrieval-pilot-20260714-185947",
+  "completed_at": "2026-07-14T10:00:14+00:00",
+  "condition": {
+    "implementation": "benchmarks/run_longmemeval_pilot.py",
+    "implementation_sha256": "6607d913582f7727665f8564d55f0d73917124a83ac6565b7f4d5a0dd4a4f5c9",
+    "name": "pointer_bm25_t24",
+    "pointer_terms": 24
+  },
+  "controls": {
+    "context_budget_tokens": 4096,
+    "online_ingestion": true,
+    "oracle_evidence": false,
+    "prompt_sha256": "4604ded95e6d3d8af2f7a0bf10d6e286a99f5167431e8df8315d40e2903a0bff",
+    "retrieval_budget_tokens": 1000,
+    "retrieval_top_k": 3,
+    "seed": 20260714
+  },
+  "metrics": {
+    "abstention_accuracy": null,
+    "answer_accuracy": null,
+    "answer_accuracy_ci95_high": null,
+    "answer_accuracy_ci95_low": null,
+    "cases_scored": 500,
+    "cases_total": 500,
+    "mean_index_chars": 9350.5,
+    "mean_ingest_tokens_per_event": 0.0,
+    "mean_query_latency_ms": 0.5862754131667316,
+    "mean_retrieved_tokens": 985.848,
+    "p95_query_latency_ms": 0.9256252087652683,
+    "retrieval_recall_at_k": 0.5589333333333333,
+    "retrieval_recall_at_k_by_type": {
+      "knowledge-update": 0.6282051282051282,
+      "multi-session": 0.4645363408521303,
+      "single-session-assistant": 0.9821428571428571,
+      "single-session-preference": 0.4,
+      "single-session-user": 0.5428571428571428,
+      "temporal-reasoning": 0.4788220551378446
+    }
+  },
+  "notes": "NON-RELEASE PILOT. No reader model was called and answer_accuracy is intentionally null. Retrieved tokens are estimated as characters/4. The pointer condition is a deterministic keyword prototype and does not implement consolidation or reconsolidation.",
+  "reader": {
+    "max_output_tokens": 0,
+    "model": "none",
+    "provider": "none-retrieval-only",
+    "quantization": "not-applicable",
+    "revision": "not-applicable",
+    "temperature": 0
+  },
+  "repository_commit": "b664d2b1b8d4b96484652d86e6f4c40528ae7b5c",
+  "repository_dirty": false,
+  "run_id": "longmemeval-retrieval-pilot-20260714-185947-pointer_bm25_t24",
+  "schema_version": 1,
+  "scoring": {
+    "name": "answer-session-recall-at-k",
+    "official": false,
+    "prompt_sha256": "783c98661e6a5057c64cc0b64505b9029e0a423456b04194da25e6a66daf5e10",
+    "revision": "pilot-v1"
+  },
+  "started_at": "2026-07-14T09:59:47+00:00",
+  "status": "complete"
+}

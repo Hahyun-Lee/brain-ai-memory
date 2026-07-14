@@ -21,7 +21,7 @@ operational backend or its raw data. Validation status is reported below.
 ![Graphical abstract: an overflowing undifferentiated memory passes through a gate into a brain-shaped system that routes, reviews, and retrieves the right memory](docs/assets/graphical-abstract.png)
 
 **Evidence snapshot (2026-07-14):** about 12 weeks in live operation · 13
-project memory indexes · 419 instrumented sessions in the current 35-day window
+project memory indexes · 419 instrumented sessions from 2026-06-10 to 2026-07-14
 · internal A/B tests · public-data retrieval runs over 1,531 LoCoMo and 500
 LongMemEval-S questions. [See what each number does and does not prove.](#evidence-status)
 
@@ -191,7 +191,7 @@ answer different questions and should not be collapsed into one headline.
 | Question | Current evidence |
 |---|---|
 | Was the architecture actually implemented and used? | **Yes—live since 2026-04-20 across 13 project memory indexes** |
-| Is there sustained operational exposure? | **Yes—419 instrumented sessions and 63.6M tokens in the current 35-day Command Center window** |
+| Is there sustained operational exposure? | **Yes—419 instrumented sessions and 63.6M tokens from 2026-06-10 through 2026-07-14** |
 | Does semantic retrieval beat the live grep control on internal pointers? | **Indicative yes—HIT@10 69.0% → 88.8%, n=116** |
 | Does equal-budget graph augmentation help the semantic store? | **Indicative yes—HIT@10 86.2% → 91.9%, n=690 sources** |
 | Has stack-aligned retrieval been compared on a public benchmark? | **Yes—LoCoMo retrieval HIT@10: GTE 62.1%, BM25 57.0%, graph-lite 51.9%; n=1,531 answerable questions** |
@@ -340,6 +340,16 @@ those systems.
 
 The one hard rule is clean-room: no real personal or sensitive data enters the
 tree. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+Please report vulnerabilities through GitHub's private vulnerability reporting
+rather than a public issue. See [SECURITY.md](SECURITY.md).
+
+## Citation
+
+If this architecture or its evaluation protocol supports your work, use the
+metadata in [CITATION.cff](CITATION.cff).
 
 ## License
 

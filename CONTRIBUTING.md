@@ -53,8 +53,9 @@ opening the PR:
 python3 benchmarks/validate_manifest.py path/to/manifest.json --release
 ```
 
-Pilot and partial runs are useful for debugging, but label them as pilots and
-keep them out of the main README score table.
+Pilot and partial runs are useful for debugging. Label them as pilots, keep them
+out of any release-grade headline or scoreboard, and report them only in a
+clearly separated pilot section with their limitations.
 
 ## Style
 

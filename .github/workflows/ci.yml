@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python
+        run: |
+          python -m py_compile \
+            benchmarks/plot_retrieval_tradeoff.py \
+            benchmarks/run_longmemeval_pilot.py \
+            benchmarks/validate_manifest.py \
+            evidence/lifecycle_under_budget.py \
+            examples/01_guard_in_action.py \
+            examples/02_lifecycle_decision.py \
+            templates/hooks/behavioral-guard.py \
+            templates/hooks/self-check-trigger.py
+      - name: Run examples and self-tests
+        run: |
+          python examples/01_guard_in_action.py
+          python examples/02_lifecycle_decision.py
+          python templates/hooks/behavioral-guard.py --selftest
+          python templates/hooks/self-check-trigger.py --selftest
+          python evidence/lifecycle_under_budget.py
+      - name: Validate public artifacts
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("benchmarks/pilots/longmemeval-s-retrieval-20260714")
+          script_hash = hashlib.sha256(
+              Path("benchmarks/run_longmemeval_pilot.py").read_bytes()
+          ).hexdigest()
+
+          json.loads(Path("evidence/operational-snapshot-2026-07-14.json").read_text())
+          json.loads((root / "summary.json").read_text())
+
+          for manifest_path in sorted(root.glob("*/manifest.json")):
+              manifest = json.loads(manifest_path.read_text())
+              assert manifest["condition"]["implementation_sha256"] == script_hash
+              assert manifest["repository_dirty"] is False
+              run_dir = manifest_path.parent
+              for key, relative in manifest["artifacts"].items():
+                  expected = manifest["artifact_sha256"][key]
+                  actual = hashlib.sha256((run_dir / relative).read_bytes()).hexdigest()
+                  assert actual == expected, f"{run_dir.name}: {relative}"
+              for name in ("predictions.jsonl", "retrieval.jsonl"):
+                  records = [json.loads(line) for line in (run_dir / name).read_text().splitlines()]
+                  assert len(records) == 500, f"{run_dir.name}: {name}"
+          PY
+          for manifest in benchmarks/pilots/longmemeval-s-retrieval-20260714/*/manifest.json; do
+            python benchmarks/validate_manifest.py "$manifest"
+          done
