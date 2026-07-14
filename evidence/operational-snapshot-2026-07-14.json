@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "snapshot_date": "2026-07-14",
+  "scope": "sanitized aggregate from a single-owner, multi-project operational deployment",
+  "deployment": {
+    "started_on": "2026-04-20",
+    "elapsed_days": 85,
+    "project_memory_indexes": 13,
+    "memory_files": 134,
+    "semantic_notes": 783,
+    "registry_entities": 74,
+    "cross_source_entities": 47,
+    "cross_source_coverage": 0.635
+  },
+  "exposure_window": {
+    "started_on": "2026-06-10",
+    "ended_on": "2026-07-14",
+    "window_days": 35,
+    "active_days": 29,
+    "sessions": 419,
+    "tokens": 63575655,
+    "longest_active_streak_days": 14
+  },
+  "instrumentation": {
+    "decision_and_issue_ledger_records": 455,
+    "policy_events": 3286,
+    "recall_probe_snapshots": 9,
+    "probes_per_snapshot_min": 18,
+    "probes_per_snapshot_max": 21,
+    "any_store_pass_rate_min": 1.0,
+    "any_store_pass_rate_max": 1.0,
+    "vector_only_pass_rate_min": 0.333,
+    "vector_only_pass_rate_max": 1.0
+  },
+  "lifecycle_examples": [
+    {
+      "measure": "bytes",
+      "before": 51014,
+      "after": 26645,
+      "reduction": 0.4777,
+      "detail_preservation": "archive retained"
+    },
+    {
+      "measure": "characters",
+      "before": 36366,
+      "after": 26103,
+      "reduction": 0.2822,
+      "detail_preservation": "archive retained"
+    }
+  ],
+  "internal_retrieval_evaluations": {
+    "auto_memory_pointer_ab": {
+      "probes": 116,
+      "corpus_files": 128,
+      "grep_hit_at_10": 0.6897,
+      "production_embedding_hit_at_10": 0.8879,
+      "grep_top_10_misses": 36,
+      "misses_recovered_by_embedding": 25,
+      "miss_recovery_rate": 0.6944
+    },
+    "semantic_graph_ab": {
+      "sources": 690,
+      "curated_relationships": 5936,
+      "embedding_hit_at_10": 0.8623,
+      "embedding_recall_at_10": 0.4102,
+      "equal_budget_graph_hit_at_10": 0.9188,
+      "equal_budget_graph_recall_at_10": 0.4879
+    }
+  },
+  "public_data_internal_evaluations": {
+    "locomo_retrieval": {
+      "conversation_samples": 10,
+      "answerable_questions": 1531,
+      "metric": "gold evidence HIT@k",
+      "gte_hit_at_1": 0.2606,
+      "gte_hit_at_5": 0.5134,
+      "gte_hit_at_10": 0.6212,
+      "bm25_hit_at_1": 0.256,
+      "bm25_hit_at_5": 0.4762,
+      "bm25_hit_at_10": 0.5696,
+      "graph_ppr_hit_at_1": 0.2626,
+      "graph_ppr_hit_at_5": 0.4709,
+      "graph_ppr_hit_at_10": 0.5193,
+      "raw_public_artifact_bundle_released": false
+    }
+  },
+  "limitations": [
+    "Exposure metrics do not establish causal benefit.",
+    "Policy events are interventions, not proven harms prevented.",
+    "Recall probes are small curated regression checks.",
+    "Internal A/B gold labels are operational links and can inflate absolute scores.",
+    "The LoCoMo result measures evidence retrieval rather than answer accuracy.",
+    "Raw operational records are private and are not included in the clean-room repository.",
+    "The deployment is longitudinal and multi-project but single-owner."
+  ]
+}

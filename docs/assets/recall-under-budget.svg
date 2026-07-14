@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Recall under a fixed index budget</title>
+  <desc id="desc">Line chart comparing append-only and lifecycle memory over 24 stored sessions under an 800-character index budget. Both policies retain 100 percent recall through four sessions. Append-only first drops at session five and reaches 17 percent by session 24. Lifecycle first drops at session 21 and reaches 83 percent by session 24.</desc>
+  <defs>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0F172A; }
+      .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+      .title { font-size: 31px; font-weight: 700; }
+      .subtitle { font-size: 16px; fill: #475569; }
+      .tick { font-size: 12px; fill: #64748B; }
+      .axis-title { font-size: 13px; font-weight: 700; fill: #475569; }
+      .line-label { font-size: 15px; font-weight: 700; }
+      .annotation-title { font-size: 14px; font-weight: 700; }
+      .annotation-copy { font-size: 12px; fill: #475569; }
+      .note { font-size: 13px; fill: #475569; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="720" rx="24" fill="#F8FAFC"/>
+
+  <text x="60" y="45" class="eyebrow" fill="#2563EB">DETERMINISTIC CAPACITY SIMULATION</text>
+  <text x="60" y="82" class="title">Smaller index entries delay overflow—they do not remove it</text>
+  <text x="60" y="111" class="subtitle">Exact-string lookup; same synthetic facts, queries, budget, and truncation rule; only the index representation changes.</text>
+
+  <rect x="100" y="130" width="129" height="430" fill="#E0F2FE" opacity="0.75"/>
+  <text x="164" y="151" text-anchor="middle" class="tick" fill="#0369A1">both fit</text>
+  <text x="164" y="168" text-anchor="middle" class="tick" fill="#0369A1">no difference</text>
+
+  <line x1="100" y1="130" x2="1090" y2="130" stroke="#CBD5E1"/>
+  <line x1="100" y1="237.5" x2="1090" y2="237.5" stroke="#E2E8F0"/>
+  <line x1="100" y1="345" x2="1090" y2="345" stroke="#CBD5E1"/>
+  <line x1="100" y1="452.5" x2="1090" y2="452.5" stroke="#E2E8F0"/>
+  <line x1="100" y1="560" x2="1090" y2="560" stroke="#CBD5E1"/>
+
+  <text x="82" y="134" text-anchor="end" class="tick">100%</text>
+  <text x="82" y="241.5" text-anchor="end" class="tick">75%</text>
+  <text x="82" y="349" text-anchor="end" class="tick">50%</text>
+  <text x="82" y="456.5" text-anchor="end" class="tick">25%</text>
+  <text x="82" y="564" text-anchor="end" class="tick">0%</text>
+  <text x="29" y="345" transform="rotate(-90 29 345)" text-anchor="middle" class="axis-title">Recall of all stored facts</text>
+
+  <line x1="100" y1="560" x2="1090" y2="560" stroke="#64748B" stroke-width="1.5"/>
+  <line x1="100" y1="130" x2="100" y2="560" stroke="#64748B" stroke-width="1.5"/>
+
+  <line x1="100" y1="560" x2="100" y2="568" stroke="#64748B"/>
+  <line x1="229" y1="560" x2="229" y2="568" stroke="#64748B"/>
+  <line x1="272" y1="560" x2="272" y2="568" stroke="#64748B"/>
+  <line x1="401" y1="560" x2="401" y2="568" stroke="#64748B"/>
+  <line x1="573" y1="560" x2="573" y2="568" stroke="#64748B"/>
+  <line x1="745" y1="560" x2="745" y2="568" stroke="#64748B"/>
+  <line x1="917" y1="560" x2="917" y2="568" stroke="#64748B"/>
+  <line x1="960" y1="560" x2="960" y2="568" stroke="#64748B"/>
+  <line x1="1089" y1="560" x2="1089" y2="568" stroke="#64748B"/>
+  <text x="100" y="588" text-anchor="middle" class="tick">1</text>
+  <text x="229" y="588" text-anchor="middle" class="tick">4</text>
+  <text x="272" y="588" text-anchor="middle" class="tick">5</text>
+  <text x="401" y="588" text-anchor="middle" class="tick">8</text>
+  <text x="573" y="588" text-anchor="middle" class="tick">12</text>
+  <text x="745" y="588" text-anchor="middle" class="tick">16</text>
+  <text x="917" y="588" text-anchor="middle" class="tick">20</text>
+  <text x="960" y="588" text-anchor="middle" class="tick">21</text>
+  <text x="1089" y="588" text-anchor="middle" class="tick">24</text>
+  <text x="595" y="616" text-anchor="middle" class="axis-title">Sessions stored</text>
+
+  <line x1="272" y1="130" x2="272" y2="560" stroke="#BE123C" stroke-width="1.5" stroke-dasharray="6 6" opacity="0.65"/>
+  <line x1="960" y1="130" x2="960" y2="560" stroke="#2563EB" stroke-width="1.5" stroke-dasharray="6 6" opacity="0.65"/>
+
+  <polyline points="100,130 143,130 186,130 229,130 272,216 315,271.9 358,314.9 401,345 444,370.8 487,388 530,405.2 573,418.1 616,426.7 659,435.3 702,443.9 745,452.5 788,456.8 831,465.4 874,469.7 917,474 960,478.3 1003,482.6 1046,486.9 1089,486.9" fill="none" stroke="#BE123C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="100,130 143,130 186,130 229,130 272,130 315,130 358,130 401,130 444,130 487,130 530,130 573,130 616,130 659,130 702,130 745,130 788,130 831,130 874,130 917,130 960,151.5 1003,168.7 1046,185.9 1089,203.1" fill="none" stroke="#2563EB" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g fill="#F8FAFC" stroke="#BE123C" stroke-width="3">
+    <circle cx="229" cy="130" r="5"/><circle cx="272" cy="216" r="5"/><circle cx="401" cy="345" r="5"/><circle cx="573" cy="418.1" r="5"/><circle cx="917" cy="474" r="5"/><circle cx="1089" cy="486.9" r="5"/>
+  </g>
+  <g fill="#F8FAFC" stroke="#2563EB" stroke-width="3">
+    <circle cx="229" cy="130" r="5"/><circle cx="272" cy="130" r="5"/><circle cx="917" cy="130" r="5"/><circle cx="960" cy="151.5" r="5"/><circle cx="1089" cy="203.1" r="5"/>
+  </g>
+
+  <rect x="292" y="184" width="216" height="68" rx="12" fill="#FFF1F2" stroke="#FECDD3"/>
+  <text x="308" y="207" class="annotation-title" fill="#BE123C">Append-only drops at 5</text>
+  <text x="308" y="228" class="annotation-copy">Old facts fall outside the index</text>
+  <text x="308" y="244" class="annotation-copy">budget as full entries accumulate.</text>
+
+  <rect x="742" y="265" width="206" height="68" rx="12" fill="#EFF6FF" stroke="#BFDBFE"/>
+  <text x="758" y="288" class="annotation-title" fill="#1D4ED8">Lifecycle drops at 21</text>
+  <text x="758" y="309" class="annotation-copy">One-line pointers delay overflow,</text>
+  <text x="758" y="325" class="annotation-copy">but the index is still finite.</text>
+
+  <line x1="1089" y1="203.1" x2="1112" y2="203.1" stroke="#2563EB" stroke-width="2"/>
+  <text x="1120" y="198" class="line-label" fill="#2563EB">83%</text>
+  <text x="1120" y="216" class="tick">lifecycle</text>
+  <line x1="1089" y1="486.9" x2="1112" y2="486.9" stroke="#BE123C" stroke-width="2"/>
+  <text x="1120" y="482" class="line-label" fill="#BE123C">17%</text>
+  <text x="1120" y="500" class="tick">append-only</text>
+
+  <line x1="60" y1="645" x2="1140" y2="645" stroke="#CBD5E1"/>
+  <circle cx="71" cy="671" r="5" fill="#2563EB"/>
+  <text x="86" y="676" class="note">Not a real-LLM benchmark. Change the script parameters and the curves move.</text>
+</svg>

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "comparison_id": "replace-me",
+  "run_id": "replace-me",
+  "status": "planned",
+  "benchmark": {
+    "name": "LongMemEval",
+    "version": "replace-with-release-or-commit",
+    "split": "replace-me",
+    "expected_cases": 0,
+    "dataset_sha256": "replace-me"
+  },
+  "repository_commit": "replace-me",
+  "repository_dirty": true,
+  "started_at": null,
+  "completed_at": null,
+  "reader": {
+    "provider": "replace-me",
+    "model": "replace-me",
+    "revision": "replace-me",
+    "quantization": "none",
+    "temperature": 0,
+    "max_output_tokens": 0
+  },
+  "condition": {
+    "name": "replace-me",
+    "implementation": "replace-me",
+    "implementation_sha256": "replace-me"
+  },
+  "controls": {
+    "prompt_sha256": "replace-me",
+    "context_budget_tokens": 0,
+    "retrieval_budget_tokens": 0,
+    "retrieval_top_k": 0,
+    "seed": 0,
+    "online_ingestion": true,
+    "oracle_evidence": false
+  },
+  "scoring": {
+    "name": "replace-me",
+    "revision": "replace-me",
+    "official": false,
+    "prompt_sha256": "replace-me"
+  },
+  "metrics": {
+    "cases_total": 0,
+    "cases_scored": 0,
+    "answer_accuracy": null,
+    "answer_accuracy_ci95_low": null,
+    "answer_accuracy_ci95_high": null,
+    "retrieval_recall_at_k": null,
+    "abstention_accuracy": null,
+    "mean_retrieved_tokens": null,
+    "mean_query_latency_ms": null,
+    "p95_query_latency_ms": null,
+    "mean_ingest_tokens_per_event": null
+  },
+  "artifacts": {
+    "predictions_jsonl": "replace-me",
+    "retrieval_jsonl": "replace-me",
+    "events_jsonl": "replace-me",
+    "stdout_log": "replace-me",
+    "stderr_log": "replace-me"
+  },
+  "artifact_sha256": {
+    "predictions_jsonl": "replace-me",
+    "retrieval_jsonl": "replace-me",
+    "events_jsonl": "replace-me",
+    "stdout_log": "replace-me",
+    "stderr_log": "replace-me"
+  },
+  "notes": ""
+}
