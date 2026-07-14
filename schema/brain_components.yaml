@@ -1,0 +1,161 @@
+# Brain-AI Memory: component ontology
+#
+# A generic map from human brain systems to LLM-agent constructs. This is the
+# single source of truth for "what are the parts, what does each do, and how does
+# each fail." Prose docs should point here rather than restating the taxonomy,
+# because a taxonomy copied into many files drifts (a component gets absorbed into a
+# neighbor in one copy, renamed in another, and the count quietly changes).
+#
+# The mapping is deliberately at the level of *function*, not implementation.
+# "Graph memory" or "input gate" is a role you can fill with whatever store or
+# hook your stack provides. Adapt the `construct` and `store` fields to your setup;
+# keep the `region`, `function`, `failure_mode`, and `diagnostic` as the invariant.
+#
+# Grounding: standard, public neuroscience. Baddeley's working-memory model,
+# hippocampal-to-cortical systems consolidation, procedural learning in the basal
+# ganglia and cerebellum. Nothing here depends on a specific brain theory being
+# correct; the mapping is an engineering analogy that has to earn its keep by
+# making agent failures diagnosable, not a claim about how the brain literally works.
+
+version: 1
+
+components:
+  - id: PFC
+    region: prefrontal cortex
+    function: Executive — set priorities, choose strategy, route work to the right store
+    construct: Orchestrator (the main agent loop + its routing/state logic)
+    store: live session + explicit task/plan state
+    failure_mode: >
+      Wrong routing: pulls from the wrong memory, picks the wrong tool, or never
+      decides at all and thrashes. The "executive dysfunction" failure: capability
+      is present but it is misapplied.
+    diagnostic: >
+      Did the agent consult the right store for this kind of question? Trace one
+      decision: which memory did it read, and was that the correct one to read?
+
+  - id: HC
+    region: hippocampus
+    function: Episodic — bind events, experiences, and entities into a contextual record
+    construct: Graph / episodic memory (event log + entity relations)
+    store: append-only session trace + a structured decision/event log + entity graph
+    failure_mode: >
+      Context breaks: the agent acts on a stale prior, re-asks something already
+      settled, or cannot connect two events that belong together. The amnesia
+      analog, where new experience never anchors to the right context.
+    diagnostic: >
+      When the agent recalled a past event, was the binding (who / what / when /
+      which thread) intact, or did it confabulate the link?
+
+  - id: ATL
+    region: anterior temporal lobe
+    function: Semantic — decontextualized concepts and facts, independent of when they were learned
+    construct: Vector / semantic memory (embeddings over a knowledge base)
+    store: embedded notes / documents, retrieved by similarity
+    failure_mode: >
+      Meaning errors: misreads a concept, follows a dangling link, or treats a
+      secondary source as primary. Also *staleness*: an index that fossilizes and
+      keeps returning an outdated view. The semantic-dementia analog.
+    diagnostic: >
+      Is the retrieved knowledge both relevant *and* fresh? Did the agent verify a
+      cited claim against the primary source, or trust the embedding's nearest hit?
+
+  - id: BG
+    region: basal ganglia
+    function: Procedural-rule — enforce learned rules (what to always / never do)
+    construct: Rule memory — static (config, instruction files) + dynamic (pre-action guards)
+    store: instruction/config files + deterministic pre-action hooks
+    failure_mode: >
+      Knows the rule but does not execute it (the freeze), or executes a forbidden
+      pattern repeatedly despite knowing better (the compulsion). Rule is encoded;
+      the gate that should fire does not.
+    diagnostic: >
+      For a known rule, is there a deterministic gate that actually fires, or does
+      enforcement depend on the model "remembering" in the moment?
+
+  - id: CB
+    region: cerebellum
+    function: Procedural-execution — carry a multi-step procedure all the way to completion
+    construct: Executable harness (a script that owns the fallback loop end-to-end)
+    store: runnable code, not prose instructions
+    failure_mode: >
+      Recalls the procedure but abandons the loop after the first path fails:
+      "tried one thing, gave up." The dysmetria analog, where the sequence is known but
+      not executed to its end.
+    diagnostic: >
+      Is the multi-step fallback externalized as code that runs to completion, or
+      re-narrated by the model each time (and thus quietly droppable mid-loop)?
+    note: >
+      Distinct from BG. BG enforces a *rule* (a single allow/deny decision); CB
+      executes a *sequence* (a loop with fallbacks). They fail differently and are
+      fixed by different mechanisms, so they are separate components even though
+      both are "procedural."
+
+  - id: IPS
+    region: intraparietal sulcus
+    function: Numerical — exact quantities, counts, and arithmetic (number sense / magnitude)
+    construct: Numerical store (a queryable mirror for numbers the model must not estimate)
+    store: a small database / structured log of counts and metrics
+    failure_mode: >
+      Estimates or misreports a count instead of reading it. The dyscalculia analog
+      ("about a dozen" where the real number was knowable and wrong).
+    diagnostic: >
+      Was every quantity in the output read from a source, or did some get
+      estimated from memory?
+
+  - id: TH
+    region: thalamus
+    function: Gating — filter inputs at the door, before they reach processing
+    construct: Input gate (a preventive pre-action filter)
+    store: pre-action security/write guards
+    failure_mode: >
+      Dangerous input passes unfiltered: an unsafe deserialization, an injected
+      payload, a write that should never have been allowed through.
+    diagnostic: >
+      Is there a filter on the *input* path that blocks the dangerous case before
+      it executes, rather than catching the damage afterward?
+
+# Channels are transfer mechanisms *between* components (the sleep / recall analogs).
+# They are not components and are not counted as such.
+channels:
+  - id: consolidation
+    analog: hippocampus-to-cortex replay during sleep
+    direction: episodic (event memory) -> semantic (knowledge base)
+    function: >
+      Promote a one-off episode into a reusable, decontextualized pattern. A failure
+      handled once becomes a rule everyone can apply next time.
+    failure_mode: >
+      If it never runs, retrieval returns a soup of raw fragments instead of distilled
+      knowledge, and the agent re-derives the same lesson endlessly.
+
+  - id: reconsolidation
+    analog: memory restabilization at the moment of retrieval
+    direction: at read-time, update what was retrieved
+    function: >
+      When a memory is recalled, detect that it is now stale or conflicts with newer
+      information, and update it (with human approval) rather than re-acting on the
+      outdated version.
+    failure_mode: >
+      If retrieval only ever surfaces the latest entry, older stale candidates are
+      hidden permanently and never corrected.
+
+# Optional: a finer-grained diagnostic lens for confident-but-wrong behavior, where a
+# plain component error is not specific enough. Not components; diagnostic aids.
+clinical_error_lens:
+  - name: value-judgment failure
+    brain_analog: ventromedial prefrontal cortex
+    symptom: acts inappropriately while knowing the rule (loss of social/contextual judgment)
+    agent_analog: routes around a denied action, or runs a compound step without permission
+
+  - name: confabulation
+    brain_analog: ventromedial PFC / basal forebrain
+    symptom: confident fabrication presented as fact
+    agent_analog: builds a confident, wrong premise and reasons forward from it (deeper than a plain semantic error)
+
+# A note on "is the loop actually closed?"
+# Existence of a component is one axis; whether its loop runs *without a human in it*
+# is a separate axis worth tracking honestly. In practice only the deterministic gates
+# (BG, TH) close on their own; they are simple allow/deny valves. The semantic and
+# executive parts (PFC routing, advisory self-checks) stay open: they depend on the
+# model's judgment in the moment, which is exactly why they cannot be fully automated
+# away. Mapping the brain does not make a hard problem deterministic; it tells you
+# *which* parts are still open, and why.

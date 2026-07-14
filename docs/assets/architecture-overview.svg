@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Brain-inspired memory architecture for LLM agents</title>
+  <desc id="desc">Input passes through a thalamus-inspired gate to a prefrontal orchestrator, which routes work to episodic, semantic, rule, execution, and numerical systems. Episodic and semantic memory are linked by consolidation and reconsolidation.</desc>
+  <defs>
+    <marker id="arrow-navy" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-blue" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-teal" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#0F766E"/>
+    </marker>
+    <marker id="arrow-amber" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#B45309"/>
+    </marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0F172A; }
+      .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+      .title { font-size: 31px; font-weight: 700; }
+      .subtitle { font-size: 16px; fill: #475569; }
+      .code { font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+      .node-title { font-size: 20px; font-weight: 700; }
+      .node-copy { font-size: 14px; fill: #334155; }
+      .failure-label { font-size: 12px; font-weight: 700; fill: #64748B; letter-spacing: .6px; }
+      .failure { font-size: 13px; fill: #475569; }
+      .edge-label { font-size: 13px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="760" rx="24" fill="#F8FAFC"/>
+
+  <text x="54" y="45" class="eyebrow" fill="#2563EB">ARCHITECTURE OVERVIEW</text>
+  <text x="54" y="82" class="title">A memory system you can diagnose component by component</text>
+  <text x="54" y="111" class="subtitle">Seven components, two memory channels, and a distinct failure mode for each part.</text>
+
+  <text x="54" y="159" class="eyebrow" fill="#64748B">INPUT</text>
+  <rect x="54" y="176" width="224" height="126" rx="18" fill="#E0F2FE" stroke="#7DD3FC" stroke-width="1.5"/>
+  <text x="76" y="207" class="code" fill="#0369A1">TH</text>
+  <text x="76" y="237" class="node-title">Input gate</text>
+  <text x="76" y="261" class="node-copy">Filters unsafe input</text>
+  <text x="76" y="282" class="failure">Failure: unfiltered input</text>
+
+  <line x1="278" y1="239" x2="378" y2="239" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
+  <text x="302" y="225" class="edge-label" fill="#64748B">admits</text>
+
+  <rect x="386" y="157" width="430" height="164" rx="20" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+  <text x="414" y="192" class="code" fill="#1D4ED8">PFC</text>
+  <text x="414" y="226" class="node-title">Orchestrator</text>
+  <text x="414" y="253" class="node-copy">Holds goals, sets priorities, and routes each task</text>
+  <text x="414" y="281" class="failure-label">DIAGNOSTIC</text>
+  <text x="508" y="281" class="failure">Did the agent read the right store?</text>
+
+  <text x="1000" y="159" class="eyebrow" fill="#64748B">OUTPUT</text>
+  <line x1="816" y1="239" x2="992" y2="239" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
+  <text x="838" y="225" class="edge-label" fill="#64748B">coordinates action</text>
+  <rect x="1000" y="176" width="148" height="126" rx="18" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="1.5"/>
+  <text x="1022" y="233" class="node-title">Action</text>
+  <text x="1022" y="259" class="node-copy">Tools and the</text>
+  <text x="1022" y="279" class="node-copy">outside world</text>
+
+  <text x="54" y="369" class="eyebrow" fill="#64748B">SPECIALIZED SYSTEMS</text>
+  <line x1="599" y1="321" x2="599" y2="378" stroke="#334155" stroke-width="2"/>
+  <line x1="151" y1="378" x2="1047" y2="378" stroke="#334155" stroke-width="2"/>
+  <line x1="151" y1="378" x2="151" y2="412" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
+  <line x1="375" y1="378" x2="375" y2="412" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
+  <line x1="599" y1="378" x2="599" y2="412" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
+  <line x1="823" y1="378" x2="823" y2="412" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
+  <line x1="1047" y1="378" x2="1047" y2="412" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
+
+  <rect x="50" y="418" width="202" height="144" rx="18" fill="#CCFBF1" stroke="#5EEAD4" stroke-width="1.5"/>
+  <text x="70" y="449" class="code" fill="#0F766E">HC</text>
+  <text x="70" y="480" class="node-title">Episodic</text>
+  <text x="70" y="504" class="node-copy">Events + relationships</text>
+  <text x="70" y="531" class="failure-label">FAILURE</text>
+  <text x="70" y="551" class="failure">Broken binding</text>
+
+  <rect x="274" y="418" width="202" height="144" rx="18" fill="#CCFBF1" stroke="#5EEAD4" stroke-width="1.5"/>
+  <text x="294" y="449" class="code" fill="#0F766E">ATL</text>
+  <text x="294" y="480" class="node-title">Semantic</text>
+  <text x="294" y="504" class="node-copy">Concepts + knowledge</text>
+  <text x="294" y="531" class="failure-label">FAILURE</text>
+  <text x="294" y="551" class="failure">Stale meaning</text>
+
+  <rect x="498" y="418" width="202" height="144" rx="18" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+  <text x="518" y="449" class="code" fill="#B45309">BG</text>
+  <text x="518" y="480" class="node-title">Rules</text>
+  <text x="518" y="504" class="node-copy">Allow / deny gates</text>
+  <text x="518" y="531" class="failure-label">FAILURE</text>
+  <text x="518" y="551" class="failure">Rule not consumed</text>
+
+  <rect x="722" y="418" width="202" height="144" rx="18" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+  <text x="742" y="449" class="code" fill="#B45309">CB</text>
+  <text x="742" y="480" class="node-title">Execution</text>
+  <text x="742" y="504" class="node-copy">Runs the full loop</text>
+  <text x="742" y="531" class="failure-label">FAILURE</text>
+  <text x="742" y="551" class="failure">Premature stop</text>
+
+  <rect x="946" y="418" width="202" height="144" rx="18" fill="#F3E8FF" stroke="#D8B4FE" stroke-width="1.5"/>
+  <text x="966" y="449" class="code" fill="#7E22CE">IPS</text>
+  <text x="966" y="480" class="node-title">Numerical</text>
+  <text x="966" y="504" class="node-copy">Exact counts + metrics</text>
+  <text x="966" y="531" class="failure-label">FAILURE</text>
+  <text x="966" y="551" class="failure">Guessing knowable values</text>
+
+  <path d="M157 568 L157 600 Q157 612 169 612 L357 612 Q369 612 369 600 L369 574" fill="none" stroke="#0F766E" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow-teal)"/>
+  <text x="263" y="632" text-anchor="middle" class="edge-label" fill="#0F766E">consolidation</text>
+  <path d="M381 568 L381 642 Q381 654 369 654 L157 654 Q145 654 145 642 L145 574" fill="none" stroke="#2563EB" stroke-width="2" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow-blue)"/>
+  <text x="263" y="678" text-anchor="middle" class="edge-label" fill="#2563EB">reconsolidation at recall</text>
+
+  <line x1="518" y1="621" x2="890" y2="621" stroke="#CBD5E1" stroke-width="1.5"/>
+  <circle cx="533" cy="621" r="5" fill="#B45309"/>
+  <text x="548" y="614" class="failure-label">GOVERNANCE DISTINCTION</text>
+  <text x="548" y="639" class="node-copy">BG blocks a decision; CB completes a sequence.</text>
+
+  <rect x="50" y="716" width="1098" height="1" fill="#CBD5E1"/>
+  <text x="50" y="741" class="subtitle">Engineering analogy, not a literal model of neuroanatomy.</text>
+</svg>

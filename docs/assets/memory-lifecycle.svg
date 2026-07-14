@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">Memory lifecycle for an LLM agent</title>
+  <desc id="desc">Long-term memory is recalled into a working session, decisions are tagged as they happen, and the session is consolidated back to long-term memory. Each entry then receives exactly one lifecycle operation: keep, compact, split, migrate to knowledge, migrate to rules, archive, or delete.</desc>
+  <defs>
+    <marker id="life-arrow" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#334155"/>
+    </marker>
+    <marker id="life-arrow-blue" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#2563EB"/>
+    </marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0F172A; }
+      .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+      .title { font-size: 31px; font-weight: 700; }
+      .subtitle { font-size: 16px; fill: #475569; }
+      .step { font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+      .node-title { font-size: 18px; font-weight: 700; }
+      .node-copy { font-size: 13px; fill: #475569; }
+      .group-title { font-size: 15px; font-weight: 700; }
+      .group-copy { font-size: 12px; fill: #64748B; }
+      .pill { font-size: 13px; font-weight: 700; }
+      .edge { font-size: 12px; font-weight: 700; fill: #64748B; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="700" rx="24" fill="#F8FAFC"/>
+
+  <text x="54" y="45" class="eyebrow" fill="#2563EB">MEMORY LIFECYCLE</text>
+  <text x="54" y="82" class="title">Memory moves instead of only growing</text>
+  <text x="54" y="111" class="subtitle">Recall reconstructs the session; tagging captures truth at the source; consolidation decides what each entry becomes.</text>
+
+  <path d="M1046 170 L1046 144 Q1046 132 1034 132 L176 132 Q164 132 164 144 L164 168" fill="none" stroke="#2563EB" stroke-width="2" stroke-linejoin="round" marker-end="url(#life-arrow-blue)"/>
+  <rect x="549" y="121" width="122" height="22" rx="11" fill="#EFF6FF" stroke="#BFDBFE"/>
+  <text x="610" y="136" text-anchor="middle" class="edge" fill="#2563EB">NEXT SESSION</text>
+
+  <rect x="50" y="170" width="208" height="120" rx="18" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+  <text x="70" y="201" class="step" fill="#1D4ED8">DURABLE STORE</text>
+  <text x="70" y="231" class="node-title">Long-term memory</text>
+  <text x="70" y="254" class="node-copy">Index + linked detail</text>
+  <text x="70" y="274" class="node-copy">Episodes, knowledge, rules</text>
+
+  <line x1="258" y1="230" x2="281" y2="230" stroke="#334155" stroke-width="2" marker-end="url(#life-arrow)"/>
+
+  <rect x="288" y="170" width="188" height="120" rx="18" fill="#E0F2FE" stroke="#7DD3FC" stroke-width="1.5"/>
+  <text x="308" y="201" class="step" fill="#0369A1">SESSION START</text>
+  <text x="308" y="231" class="node-title">Recall</text>
+  <text x="308" y="254" class="node-copy">Load the index, recent</text>
+  <text x="308" y="274" class="node-copy">decisions, open threads</text>
+
+  <line x1="476" y1="230" x2="499" y2="230" stroke="#334155" stroke-width="2" marker-end="url(#life-arrow)"/>
+
+  <rect x="506" y="170" width="188" height="120" rx="18" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="1.5"/>
+  <text x="526" y="201" class="step" fill="#475569">ACTIVE CONTEXT</text>
+  <text x="526" y="231" class="node-title">Working session</text>
+  <text x="526" y="254" class="node-copy">Reason, decide, execute,</text>
+  <text x="526" y="274" class="node-copy">and observe outcomes</text>
+
+  <line x1="694" y1="230" x2="717" y2="230" stroke="#334155" stroke-width="2" marker-end="url(#life-arrow)"/>
+
+  <rect x="724" y="170" width="188" height="120" rx="18" fill="#CCFBF1" stroke="#5EEAD4" stroke-width="1.5"/>
+  <text x="744" y="201" class="step" fill="#0F766E">DURING SESSION</text>
+  <text x="744" y="231" class="node-title">Tag in place</text>
+  <text x="744" y="254" class="node-copy">Capture decisions and</text>
+  <text x="744" y="274" class="node-copy">agreements in the moment</text>
+
+  <line x1="912" y1="230" x2="935" y2="230" stroke="#334155" stroke-width="2" marker-end="url(#life-arrow)"/>
+
+  <rect x="942" y="170" width="208" height="120" rx="18" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+  <text x="962" y="201" class="step" fill="#B45309">SESSION END</text>
+  <text x="962" y="231" class="node-title">Consolidate</text>
+  <text x="962" y="254" class="node-copy">Write durable entries and</text>
+  <text x="962" y="274" class="node-copy">update the recall index</text>
+
+  <line x1="1046" y1="290" x2="1046" y2="340" stroke="#334155" stroke-width="2"/>
+  <line x1="1046" y1="340" x2="800" y2="340" stroke="#334155" stroke-width="2" marker-end="url(#life-arrow)"/>
+
+  <rect x="356" y="318" width="436" height="70" rx="18" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="574" y="346" text-anchor="middle" class="step" fill="#475569">LIFECYCLE VERDICT</text>
+  <text x="574" y="371" text-anchor="middle" class="node-title">Exactly one operation per entry</text>
+
+  <line x1="574" y1="388" x2="574" y2="410" stroke="#334155" stroke-width="2"/>
+  <line x1="157" y1="410" x2="1038" y2="410" stroke="#334155" stroke-width="2"/>
+  <line x1="157" y1="410" x2="157" y2="446" stroke="#334155" stroke-width="2" marker-end="url(#life-arrow)"/>
+  <line x1="425" y1="410" x2="425" y2="446" stroke="#334155" stroke-width="2" marker-end="url(#life-arrow)"/>
+  <line x1="745" y1="410" x2="745" y2="446" stroke="#334155" stroke-width="2" marker-end="url(#life-arrow)"/>
+  <line x1="1038" y1="410" x2="1038" y2="446" stroke="#334155" stroke-width="2" marker-end="url(#life-arrow)"/>
+
+  <rect x="50" y="452" width="214" height="154" rx="18" fill="#E0F2FE" stroke="#7DD3FC" stroke-width="1.5"/>
+  <text x="70" y="482" class="group-title" fill="#0369A1">Preserve</text>
+  <text x="70" y="503" class="group-copy">Still active or referenced</text>
+  <rect x="70" y="525" width="174" height="42" rx="12" fill="#FFFFFF" stroke="#BAE6FD"/>
+  <text x="157" y="551" text-anchor="middle" class="pill">keep</text>
+
+  <rect x="286" y="452" width="278" height="154" rx="18" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5"/>
+  <text x="306" y="482" class="group-title" fill="#475569">Reshape</text>
+  <text x="306" y="503" class="group-copy">Keep the signal; change its footprint</text>
+  <rect x="306" y="525" width="112" height="42" rx="12" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="362" y="551" text-anchor="middle" class="pill">compact</text>
+  <rect x="432" y="525" width="112" height="42" rx="12" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <text x="488" y="551" text-anchor="middle" class="pill">split</text>
+
+  <rect x="586" y="452" width="318" height="154" rx="18" fill="#CCFBF1" stroke="#5EEAD4" stroke-width="1.5"/>
+  <text x="606" y="482" class="group-title" fill="#0F766E">Promote</text>
+  <text x="606" y="503" class="group-copy">Turn an episode into reusable capability</text>
+  <rect x="606" y="525" width="134" height="58" rx="12" fill="#FFFFFF" stroke="#99F6E4"/>
+  <text x="673" y="550" text-anchor="middle" class="pill">migrate to</text>
+  <text x="673" y="570" text-anchor="middle" class="pill">knowledge</text>
+  <rect x="752" y="525" width="132" height="58" rx="12" fill="#FFFFFF" stroke="#99F6E4"/>
+  <text x="818" y="550" text-anchor="middle" class="pill">migrate to</text>
+  <text x="818" y="570" text-anchor="middle" class="pill">rules</text>
+
+  <rect x="926" y="452" width="224" height="154" rx="18" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+  <text x="946" y="482" class="group-title" fill="#B45309">Retire</text>
+  <text x="946" y="503" class="group-copy">Dormant or demonstrably false</text>
+  <rect x="946" y="525" width="88" height="42" rx="12" fill="#FFFFFF" stroke="#FDE68A"/>
+  <text x="990" y="551" text-anchor="middle" class="pill">archive</text>
+  <rect x="1046" y="525" width="84" height="42" rx="12" fill="#FFFFFF" stroke="#FDE68A"/>
+  <text x="1088" y="551" text-anchor="middle" class="pill">delete</text>
+
+  <line x1="50" y1="642" x2="1150" y2="642" stroke="#CBD5E1"/>
+  <circle cx="61" cy="666" r="5" fill="#2563EB"/>
+  <text x="76" y="671" class="subtitle">What is stored is not necessarily what is recalled—index budget, links, and per-file caps define the usable memory.</text>
+</svg>
