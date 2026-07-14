@@ -1,3 +1,5 @@
+**English** | [한국어](README.ko.md)
+
 # Brain-AI Memory
 
 > Not another memory database: a diagnostic and control architecture for
