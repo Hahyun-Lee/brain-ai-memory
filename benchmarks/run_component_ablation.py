@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Run deterministic cumulative and leave-one-out component ablations.
+"""Run deterministic cumulative and leave-one-out mechanism ablations.
 
-This suite measures public runtime contract conformance. Its cases are written
-for those contracts, use no LLM or external API, and cannot support a claim of
-better general QA, reasoning, or agent quality. The flat control may retrieve
-the right text while failing a typed component, gate, sequence, or lifecycle
-contract; raw records preserve those partial observations.
+This suite measures authored contracts for ten lifecycle/control mechanisms.
+It does not cover every public package feature. Its cases use no LLM or
+external API and cannot support a claim of better general QA, reasoning, or
+agent quality. The flat control may retrieve the right text while failing a
+typed route, gate, sequence, or lifecycle contract; raw records preserve those
+partial observations.
 """
 
 from __future__ import annotations
@@ -48,17 +49,43 @@ FEATURES = (
 )
 
 FEATURE_LABELS = {
-    "pfc_routing": "PFC · goal-aware component routing",
+    "pfc_routing": "PFC · query/action-cue routing",
     "atl_semantic": "ATL · semantic knowledge",
     "hc_episodic": "HC · timestamped episodes",
     "ips_state": "IPS · typed exact numerical state",
-    "th_gate": "TH · deterministic input/action gate",
+    "th_gate": "TH · deterministic proposed-action gate",
     "bg_rules": "BG · stored procedural rules",
     "cb_sequence": "CB · executable fallback sequence",
     "consolidation": "HC→ATL/BG · approved consolidation",
-    "reconsolidation": "ATL update · provenance-preserving supersession",
+    "reconsolidation": "ATL update · source-linked supersession",
     "checkpoint": "Lifecycle · durable checkpoint",
 }
+
+# Files that directly determine this deterministic suite. A recorded manifest
+# hashes the versions at its repository_commit; a new run hashes the current
+# checkout. The ontology was added after the recorded run and is included for
+# current runs because BrainAIRuntime now loads it during initialization.
+IMPLEMENTATION_INPUTS = (
+    "benchmarks/run_component_ablation.py",
+    "benchmarks/component_ablation_cases.jsonl",
+    "src/brain_ai_memory/__init__.py",
+    "src/brain_ai_memory/runtime.py",
+    "src/brain_ai_memory/storage.py",
+    "src/brain_ai_memory/text.py",
+    "src/brain_ai_memory/config.py",
+    "src/brain_ai_memory/adapters.py",
+    "src/brain_ai_memory/ontology.py",
+    "schema/brain_components.yaml",
+)
+
+SEMANTIC_NORMALIZATION = "component-ablation-outcome-v1"
+SEMANTIC_EXCLUDED_FIELDS = (
+    "latency_ms",
+    "observed.counts_before.entities",
+    "observed.counts_before.relations",
+    "observed.counts_after.entities",
+    "observed.counts_after.relations",
+)
 
 
 @dataclass(frozen=True)
@@ -461,8 +488,8 @@ def summarize(records: list[dict], cases: list[dict], all_conditions: list[Condi
         and record["category"] in {"semantic_memory", "episodic_memory", "exact_state"}
     ]
     return {
-        "benchmark": "Brain-AI public runtime component-contract ablation",
-        "claim_scope": "deterministic component-contract conformance only; not external LLM QA or agent-quality efficacy",
+        "benchmark": "Brain-AI ten-mechanism lifecycle/control contract ablation",
+        "claim_scope": "authored deterministic contracts for ten ablated mechanisms only; not the full package, external LLM QA, or agent-quality efficacy",
         "case_count": case_count,
         "condition_count": len(all_conditions),
         "record_count": len(records),
@@ -488,6 +515,118 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def load_records(path: Path) -> list[dict]:
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def normalized_semantic_outcomes(records: list[dict]) -> list[dict]:
+    """Return stable scored outcomes, excluding diagnostics and schema-only counts.
+
+    Latency is environment-dependent. The entity/relation count keys were added
+    to MemoryStore.counts after the recorded run but do not change any ablation
+    check. Every other field remains in the digest so a behavioral difference
+    fails parity instead of being silently normalized away.
+    """
+
+    normalized: list[dict] = []
+    for record in records:
+        item = json.loads(json.dumps(record, ensure_ascii=False))
+        item.pop("latency_ms", None)
+        observed = item.get("observed")
+        if isinstance(observed, dict):
+            for name in ("counts_before", "counts_after"):
+                counts = observed.get(name)
+                if isinstance(counts, dict):
+                    counts.pop("entities", None)
+                    counts.pop("relations", None)
+        normalized.append(item)
+    return sorted(
+        normalized,
+        key=lambda item: (str(item.get("condition", "")), str(item.get("case_id", ""))),
+    )
+
+
+def semantic_outcome_sha256(records: list[dict]) -> str:
+    payload = "".join(
+        json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+        for item in normalized_semantic_outcomes(records)
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def implementation_sha256() -> dict[str, str]:
+    return {
+        relative: sha256_file(ROOT / relative)
+        for relative in IMPLEMENTATION_INPUTS
+    }
+
+
+def verify_reference(records: list[dict], manifest_path: Path) -> dict:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    semantic = manifest.get("semantic_outcome", {})
+    if semantic.get("normalization") != SEMANTIC_NORMALIZATION:
+        raise ValueError(
+            f"unsupported semantic normalization in {manifest_path}: "
+            f"{semantic.get('normalization')!r}"
+        )
+    if tuple(semantic.get("excluded_fields", ())) != SEMANTIC_EXCLUDED_FIELDS:
+        raise ValueError(f"semantic exclusions do not match {SEMANTIC_NORMALIZATION}")
+    expected = semantic.get("sha256")
+    if not isinstance(expected, str) or len(expected) != 64:
+        raise ValueError(f"semantic outcome digest is missing or invalid in {manifest_path}")
+    actual = semantic_outcome_sha256(records)
+    if actual != expected:
+        raise ValueError(
+            f"semantic outcome differs from recorded run: expected {expected}, got {actual}"
+        )
+    return {
+        "reference_manifest": str(manifest_path),
+        "normalization": SEMANTIC_NORMALIZATION,
+        "semantic_outcome_sha256": actual,
+        "semantic_parity": True,
+    }
+
+
+def verify_recorded_source_provenance(manifest_path: Path) -> dict:
+    """Verify source hashes against blobs at the manifest's recorded commit."""
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    commit = manifest.get("repository_commit")
+    expected_by_path = manifest.get("implementation_sha256", {})
+    if not commit or not expected_by_path:
+        raise ValueError(f"recorded source provenance is incomplete in {manifest_path}")
+    if not isinstance(commit, str) or not 7 <= len(commit) <= 40 or any(
+        character not in "0123456789abcdefABCDEF" for character in commit
+    ):
+        raise ValueError(f"invalid recorded git commit in {manifest_path}")
+    verified = 0
+    for relative, expected in expected_by_path.items():
+        source_path = Path(relative)
+        if source_path.is_absolute() or ".." in source_path.parts:
+            raise ValueError(f"unsafe recorded source path: {relative}")
+        result = subprocess.run(
+            ["git", "show", f"{commit}:{relative}"],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise ValueError(
+                f"cannot read {relative} at recorded commit {commit}; fetch repository history"
+            )
+        actual = hashlib.sha256(result.stdout).hexdigest()
+        if actual != expected:
+            raise ValueError(
+                f"recorded source hash mismatch for {relative}: expected {expected}, got {actual}"
+            )
+        verified += 1
+    return {"repository_commit": commit, "source_files_verified": verified}
+
+
 def git_value(*args: str) -> str:
     result = subprocess.run(
         ["git", *args], cwd=ROOT, capture_output=True, text=True, check=False
@@ -500,24 +639,25 @@ def render_report(summary: dict) -> str:
     flat = by_name[summary["flat_condition"]]
     full = by_name[summary["full_condition"]]
     lines = [
-        "# Component-contract ablation (2026-07-15)",
+        "# Ten-mechanism lifecycle/control contract ablation (2026-07-15)",
         "",
-        "This deterministic benchmark removes and cumulatively adds public runtime",
-        "components. It asks whether the package executes its stated contracts; it",
-        "does **not** test LLM answer quality, general reasoning, or real-world agent",
+        "This deterministic benchmark removes and cumulatively adds ten authored",
+        "lifecycle/control mechanisms. It asks whether those mechanisms execute their",
+        "stated contracts; it does **not** cover the whole public package or test",
+        "LLM answer quality, general reasoning, or real-world agent",
         "efficacy. The cases are authored around these contracts, so this is not an",
         "external benchmark or evidence that a brain-inspired architecture beats RAG.",
         "",
         "## Result",
         "",
-        "| condition | passed | rate | delta vs full |",
+        "| condition | passed | rate | delta vs all-ten |",
         "|---|---:|---:|---:|",
         f"| flat retrieval-only control | {flat['passed']} / {flat['total']} | {flat['accuracy']:.1%} | {flat['delta_vs_full']:+d} |",
-        f"| full public runtime | {full['passed']} / {full['total']} | {full['accuracy']:.1%} | {full['delta_vs_full']:+d} |",
+        f"| all ten mechanisms enabled | {full['passed']} / {full['total']} | {full['accuracy']:.1%} | {full['delta_vs_full']:+d} |",
         "",
         f"The flat control retrieved the expected top item for {summary['flat_retrieval_diagnostic']['top_id_matches']} / {summary['flat_retrieval_diagnostic']['memory_query_count']} memory queries (see",
         "`observed.top_id_matches` in `records.jsonl`) but does not satisfy typed",
-        "component, exact-state, gating, fallback, or lifecycle contracts.",
+        "routing, exact-state, gating, fallback, or lifecycle contracts.",
         "",
         "## What each addition recovered",
         "",
@@ -532,7 +672,7 @@ def render_report(summary: dict) -> str:
     lines.extend(
         [
             "",
-            "## Leave-one-out removal from the full runtime",
+            "## Leave-one-out removal from the all-ten condition",
             "",
             "| removed mechanism | score | drop | contracts that fail |",
             "|---|---:|---:|---|",
@@ -549,6 +689,8 @@ def render_report(summary: dict) -> str:
             "## Interpretation boundary",
             "",
             "- Scores mean only that deterministic software contracts were met.",
+            "- Entity/relation management, ontology loading, MCP/CLI surfaces, semantic",
+            "  adapters, and provider-host integration are outside these 20 cases.",
             "- PFC removal has a larger drop because routed memory access depends on it;",
             "  this is an explicit dependency, not a measured biological interaction.",
             "- Latency includes fresh local-store setup and subprocess startup for the",
@@ -557,12 +699,21 @@ def render_report(summary: dict) -> str:
             "- End-to-end quality claims still require preregistered LongMemEval or",
             "  MemoryAgentBench runs with matched model and context budgets.",
             "",
-            "## Reproduce",
+            "## Reproduce and compare",
+            "",
+            "The artifacts record the source commit named in `manifest.json`. A second",
+            "run is not expected to reproduce artifact bytes: latency and generated",
+            "metadata vary. Compare normalized semantic outcomes instead:",
             "",
             "```bash",
             "python3 benchmarks/run_component_ablation.py \\",
-            "  --output benchmarks/pilots/component-ablation-20260715",
-            "python3 benchmarks/plot_component_ablation.py",
+            "  --output /tmp/component-ablation-current \\",
+            "  --reference-manifest benchmarks/pilots/component-ablation-20260715/manifest.json \\",
+            "  --verify-source-provenance",
+            "python3 -m pip install \".[plot]\"",
+            "python3 benchmarks/plot_component_ablation.py \\",
+            "  --summary /tmp/component-ablation-current/summary.json \\",
+            "  --output /tmp/component-ablation-current.png",
             "python3 -m unittest discover -s tests -v",
             "```",
             "",
@@ -620,6 +771,12 @@ def write_artifacts(output: Path, records: list[dict], summary: dict, cases_path
             "cases": sha256_file(cases_path),
             "runner": sha256_file(Path(__file__)),
         },
+        "implementation_sha256": implementation_sha256(),
+        "semantic_outcome": {
+            "normalization": SEMANTIC_NORMALIZATION,
+            "excluded_fields": list(SEMANTIC_EXCLUDED_FIELDS),
+            "sha256": semantic_outcome_sha256(records),
+        },
         "artifact_sha256": {
             "records.jsonl": sha256_file(records_path),
             "summary.json": sha256_file(summary_path),
@@ -635,9 +792,39 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cases", type=Path, default=CASES)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--reference-manifest",
+        type=Path,
+        help="fail unless normalized semantic outcomes match this recorded manifest",
+    )
+    parser.add_argument(
+        "--verify-records",
+        type=Path,
+        help="verify an existing records.jsonl instead of running the suite",
+    )
+    parser.add_argument(
+        "--verify-source-provenance",
+        action="store_true",
+        help="verify reference implementation hashes against its recorded git commit",
+    )
     args = parser.parse_args()
+    if args.verify_records:
+        if not args.reference_manifest:
+            parser.error("--verify-records requires --reference-manifest")
+        result = verify_reference(load_records(args.verify_records), args.reference_manifest)
+        if args.verify_source_provenance:
+            result.update(verify_recorded_source_provenance(args.reference_manifest))
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    if args.verify_source_provenance and not args.reference_manifest:
+        parser.error("--verify-source-provenance requires --reference-manifest")
     cases = load_cases(args.cases)
     records, summary = run_suite(cases)
+    verification = None
+    if args.reference_manifest:
+        verification = verify_reference(records, args.reference_manifest)
+        if args.verify_source_provenance:
+            verification.update(verify_recorded_source_provenance(args.reference_manifest))
     manifest = write_artifacts(args.output, records, summary, args.cases)
     by_name = {row["condition"]: row for row in summary["conditions"]}
     flat = by_name[summary["flat_condition"]]
@@ -647,9 +834,12 @@ def main() -> int:
             {
                 "output": str(args.output),
                 "flat": f"{flat['passed']}/{flat['total']}",
-                "full": f"{full['passed']}/{full['total']}",
+                "all_ten": f"{full['passed']}/{full['total']}",
                 "records": summary["record_count"],
                 "manifest_status": manifest["status"],
+                "recorded_semantic_parity": (
+                    verification["semantic_parity"] if verification else None
+                ),
             },
             ensure_ascii=False,
             indent=2,

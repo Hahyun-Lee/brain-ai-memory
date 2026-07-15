@@ -12,6 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The recorded ablation manifest verifies source blobs at its exact
+          # historical commit, not against whichever release is current.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -33,12 +37,19 @@ jobs:
             templates/hooks/behavioral-guard.py \
             templates/hooks/self-check-trigger.py
       - name: Install public runtime
-        run: python -m pip install ".[mcp]"
+        run: python -m pip install ".[mcp,plot]"
       - name: Test public runtime and adapters
         run: |
           python -W error::ResourceWarning -m unittest discover -s tests -v
           python benchmarks/run_runtime_contract.py --output /tmp/runtime-contract.json
-          python benchmarks/run_component_ablation.py --output /tmp/component-ablation
+          python benchmarks/run_component_ablation.py \
+            --output /tmp/component-ablation \
+            --reference-manifest benchmarks/pilots/component-ablation-20260715/manifest.json \
+            --verify-source-provenance
+          python benchmarks/plot_component_ablation.py \
+            --summary /tmp/component-ablation/summary.json \
+            --output /tmp/component-ablation.png
+          test -s /tmp/component-ablation.png
           python - <<'PY'
           import json
           result = json.load(open('/tmp/runtime-contract.json'))
@@ -103,9 +114,9 @@ jobs:
           ablation_root = Path("benchmarks/pilots/component-ablation-20260715")
           manifest = json.loads((ablation_root / "manifest.json").read_text())
           assert manifest["repository_dirty"] is False
-          assert manifest["input_sha256"]["runner"] == hashlib.sha256(
-              Path("benchmarks/run_component_ablation.py").read_bytes()
-          ).hexdigest()
+          assert manifest["repository_commit"] == "d0d675ead16b96b6f4ac0a5aaab7ddcf20786ba7"
+          assert manifest["semantic_outcome"]["normalization"] == "component-ablation-outcome-v1"
+          assert len(manifest["implementation_sha256"]) == 8
           for name, expected in manifest["artifact_sha256"].items():
               actual = hashlib.sha256((ablation_root / name).read_bytes()).hexdigest()
               assert actual == expected, name

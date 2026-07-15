@@ -58,6 +58,30 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(result["attempt_count"], 2)
         self.assertEqual(result["attempts"][1]["execution"]["stdout"].strip(), "recovered")
 
+    def test_harness_and_sequence_consume_entity_scoped_rules(self):
+        atlas = self.runtime.store.put_entity("Atlas", entity_type="project")
+        boreal = self.runtime.store.put_entity("Boreal", entity_type="project")
+        self.runtime.store.add_rule(
+            r"entity-sensitive-command",
+            reason="Atlas-specific approval required",
+            entities=[atlas["id"]],
+        )
+        command = [sys.executable, "-c", "print('ok')", "entity-sensitive-command"]
+
+        blocked = self.runtime.execute("deploy", command, entity="Atlas")
+        allowed = self.runtime.execute("deploy", command, entity=boreal["id"])
+        sequence = self.runtime.execute_sequence(
+            "deploy",
+            [command],
+            entity=atlas["id"],
+        )
+
+        self.assertEqual(blocked["status"], "blocked")
+        self.assertEqual(blocked["entity"]["id"], atlas["id"])
+        self.assertEqual(allowed["status"], "completed")
+        self.assertEqual(sequence["status"], "blocked")
+        self.assertEqual(sequence["entity"], atlas["id"])
+
     def test_consolidation_requires_apply(self):
         event = self.runtime.store.append_event(
             "Repeated failures should become a reusable rule.",
@@ -77,6 +101,26 @@ class RuntimeTest(unittest.TestCase):
         self.runtime.store.record_lifecycle("episodic", event["id"], "archive", "resolved")
         self.assertEqual(self.runtime.store.events(), [])
         self.assertEqual(len(self.runtime.store.events(include_inactive=True)), 1)
+
+    def test_lifecycle_delete_is_a_recoverable_tombstone_not_physical_erasure(self):
+        event = self.runtime.store.append_event("superseded claim", source="test")
+        decision = self.runtime.store.record_lifecycle(
+            "episodic", event["id"], "delete", "made void by later evidence"
+        )
+        self.assertEqual(decision["operation"], "delete")
+        self.assertEqual(self.runtime.store.events(), [])
+        retained = self.runtime.store.events(include_inactive=True)
+        self.assertEqual([item["id"] for item in retained], [event["id"]])
+        self.assertEqual(retained[0]["text"], "superseded claim")
+
+        knowledge = self.runtime.store.put_knowledge("obsolete policy", source="test")
+        self.runtime.store.record_lifecycle(
+            "semantic", knowledge["id"], "delete", "superseded"
+        )
+        self.assertEqual(self.runtime.store.knowledge(), [])
+        retained_knowledge = self.runtime.store.knowledge(include_inactive=True)
+        self.assertEqual(retained_knowledge[0]["status"], "deleted")
+        self.assertEqual(retained_knowledge[0]["text"], "obsolete policy")
 
     def test_reconsolidation_supersedes_stale_knowledge(self):
         old = self.runtime.store.put_knowledge("Release day is Friday", source="test")
@@ -133,6 +177,7 @@ class RuntimeTest(unittest.TestCase):
     def test_ontology_is_loaded_and_validated_at_startup(self):
         summary = self.runtime.ontology_summary
         self.assertEqual(summary["component_count"], 7)
+        self.assertEqual(summary["category_counts"], {"memory": 5, "control": 2})
         self.assertEqual(summary["channel_count"], 2)
         self.assertIn("PFC", summary["component_ids"])
         self.assertIn("consolidation", summary["channel_ids"])

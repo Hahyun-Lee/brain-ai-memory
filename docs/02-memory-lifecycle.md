@@ -1,5 +1,7 @@
 # 02 — The Memory Lifecycle
 
+[한국어](02-memory-lifecycle.ko.md)
+
 > A memory store that only grows is a memory store that fails. The hard part of agent memory is not
 > writing things down; it is deciding what each entry should *become* over time, and moving it there
 > before the store rots. This document gives a concrete decision rule for every entry, and the few
@@ -29,23 +31,33 @@ choosing among them.
 
 Every memory entry, when you next look at it, gets exactly one of these:
 
-| Operation | When it applies | What happens |
+| Operation | When it applies | Reference-runtime effect |
 |---|---|---|
-| **keep** | Still active, still referenced, or carries no signal that it has been superseded | Left in place, unchanged |
-| **compact** | The point survives but the detail no longer earns its space | Shrunk to a one-line pointer; the link is preserved |
-| **archive** | Resolved, old, and captured elsewhere (a rule, a commit, a downstream doc) | Body moved to an archive file; a one-line link stays in the index |
-| **migrate-to-knowledge-base** | A reusable principle or method, useful beyond this one context | A linked semantic note is derived with provenance; the source entry is retained but marked migrated |
-| **migrate-to-rules** | A repeatable procedure that can be expressed as an enforceable rule or executable step | A linked rule or harness is created with approval; the source entry is retained but marked migrated |
-| **delete** | Wrong or superseded by a later decision, with nothing worth keeping | Removed entirely, archive included. Used sparingly |
-| **split** | One entry has grown to cover several distinct topics | Broken into separate topic files, each linked from the index |
+| **keep** | Still active, still referenced, or carries no signal that it has been superseded | Records the decision; the entry stays active and unchanged |
+| **compact** | The point survives but the detail no longer earns its space | Records a candidate for a host-created pointer; it does not rewrite the source |
+| **archive** | Resolved, old, and captured elsewhere (a rule, a commit, a downstream doc) | Marks the entry inactive in default views while retaining the source for audit |
+| **migrate-to-knowledge-base** | A reusable principle or method, useful beyond this one context | Hides an episodic source from default views; actual derivation requires explicit consolidation preview and apply |
+| **migrate-to-rules** | A repeatable procedure that can be expressed as an enforceable rule or executable step | Hides an episodic source from default views; an actual rule requires approved consolidation with an explicit pattern |
+| **delete** | Wrong or superseded by a later decision, with nothing worth keeping | Creates a logical tombstone/inactive status; it does **not** physically erase source bytes |
+| **split** | One entry has grown to cover several distinct topics | Records a host action to create linked topic entries; it does not split files automatically |
 
-Two of these implement the consolidation-inspired software channel from
-[`01`](01-the-mapping.md#the-two-channels): **migrate-to-knowledge-base** derives
-reusable knowledge from episodic evidence, and **migrate-to-rules** turns an
-approved repeated lesson into an enforceable rule or executable step. Neither
-operation claims to reproduce biological consolidation. The rest are
-housekeeping that keeps the episodic store legible enough for promotion to
-happen at all.
+The table states what the installable alpha actually does. For episodic
+entries, `archive`, `delete`, and both migration decisions hide the entry from
+default active views but leave the append-only event available through
+`include_inactive`; for semantic entries, only `archive` and `delete` update
+status while retaining the row, and other lifecycle decisions add audit state
+without changing that status. `compact` and `split` are audited decisions for
+the host, not file-rewrite engines. Secure erasure, archive-file movement, and
+retention enforcement remain host responsibilities.
+
+At the architecture level, two decisions direct the consolidation-inspired
+software channel from [`01`](01-the-mapping.md#the-two-channels):
+**migrate-to-knowledge-base** identifies episodic evidence worth deriving into
+reusable knowledge, and **migrate-to-rules** identifies an approved repeated
+lesson worth turning into an enforceable rule or executable step. The
+`lifecycle` command alone creates neither artifact; use an explicit
+`consolidate` preview/apply flow. Neither operation claims to reproduce
+biological consolidation.
 
 ### Choosing between them
 
@@ -64,10 +76,35 @@ The ordering matters because the cheap operations (archive, compact) are temptin
 the migration questions first means a reusable lesson gets promoted into the knowledge base *before*
 anyone considers archiving it into silence.
 
-A note on **delete**: it is the only operation that destroys information, so it is gated hard. "This
-is no longer relevant" is not a reason to delete; it is a reason to archive. The bar for delete is
-"this is false, or a later decision made it void." When unsure, archive. Archived memory is dormant,
-not gone, and can be recalled by a cue; deleted memory cannot.
+A note on **delete**: at the design level it is the only decision that may
+authorize eventual destruction, so it is gated hard. "This is no longer
+relevant" is not a reason to delete; it is a reason to archive. The bar is
+"this is false, or a later decision made it void." In this reference runtime,
+however, delete is deliberately a recoverable logical tombstone—not proof of
+privacy erasure. A host that requires physical deletion must perform and verify
+that separate retention-policy operation.
+
+## Four representations, not one memory file
+
+A long-running agent should not treat every representation as the same kind of
+memory:
+
+| Representation | Purpose | Default policy |
+|---|---|---|
+| **raw host trace** | Provider-native transcript or tool-event evidence | Do not retain unless an explicit host privacy and retention policy permits it; when retained, never rewrite the evidence in place |
+| **working memory** | Host-owned, token-budgeted current-task context | Assemble it from only the scoped candidate records needed now |
+| **episodic memory** | Structured event with entity binding, ingest time, text, and source label | Preserve the host's evidence link separately when available |
+| **consolidated memory** | Reusable knowledge or an approved procedure derived from episodes | Version it, record its sources, and make promotion explicit |
+
+A transcript stored on disk is not automatically working memory, and a summary
+is not automatically a trustworthy fact. Retrieval returns a record-count-
+limited candidate view; the host decides what fits its model's token budget and
+working context. Consolidation derives a new representation and must not erase
+its evidence. The public runtime owns explicit `events.jsonl` records and
+checkpoints, but it does not scrape Claude Code, Codex, or other host
+transcripts. This repository ships no Claude Code JSONL or Codex rollout
+adapter. An integrating host or custom adapter owns any permitted raw-trace
+retention and maps only selected events into the runtime.
 
 ## Session to long-term transfer
 
@@ -75,21 +112,37 @@ The lifecycle above governs entries at rest. There is also an explicit software
 flow *through* a session, using the same mnemonic labels without asserting a
 biological transfer mechanism.
 
-- **Session start (recall).** Long-term memory loads into working memory: the index, recent
-  decisions, open threads. The agent reconstructs where it left off rather than starting blank. This
-  is the long-term-to-working direction.
-- **During the session (tagging).** Decisions, issues, and externally-made agreements get tagged in
-  place as they happen, not reconstructed at the end. Tagging at the moment of the event is the
-  difference between an accurate episodic trace and a plausible reconstruction. Anything decided
-  outside the agent (a conversation, a meeting) has to be written in deliberately, or it never
-  enters memory at all.
-- **Session end (consolidation).** Working memory transfers back to long-term: the session's tagged
-  decisions become durable entries, and the index is updated. This is the moment to run the
-  consolidation channel, promoting the episodes that earned it.
+- **Session start (recall).** The host explicitly queries long-term memory and
+  supplies a scoped result to the current working context: for example, recent
+  events, applicable rules, and exact state. The runtime does not inject this
+  context into a model by itself. This is the long-term-to-working direction.
+- **During the session (tagging).** The host explicitly calls
+  `brain_remember` (or `brain-ai remember`) for selected decisions, issues, and
+  externally made agreements as they happen. Anything not deliberately
+  recorded remains outside the structured episodic store; the runtime does not
+  infer it from a provider transcript.
+- **Session end (consolidation and handoff).** The host previews
+  `brain-ai consolidate`, applies it only after approval, and calls
+  `brain_checkpoint` (or `brain-ai checkpoint`) for a durable handoff. This is
+  an explicit integration sequence, not an automatic transfer of everything
+  in working memory.
 
-The single most common failure here is skipping the tagging step and trying to reconstruct the
-session at the end. By then the context has been compressed and the early work is gone. Treat the
-tag as the write; the end-of-session step is consolidation, not recall.
+The single most common failure here is skipping the explicit write and trying
+to reconstruct the session at the end. By then the context may have been
+compressed and early work may be gone. Treat `brain_remember` as the structured
+write; consolidation and checkpointing are separate, explicit operations.
+
+The two directions define a **host integration contract**, not a background
+loop. On the core memory path, the host translates the current goal into a
+query and entity scope, PFC returns candidate records from the relevant stores,
+and the host assembles the actual working context. Bottom-up, the host
+explicitly records selected outcomes with `brain_remember`, previews and
+applies consolidation, and creates the checkpoint. On the optional action
+path, a host-proposed action can receive a TH/BG verdict, and CB is used only
+when the host invokes `brain-ai harness` or `brain-ai sequence`. The loop is
+not closed merely because files or an MCP connection exist: every producer
+needs a consumer, and an integration check should verify that the handoff was
+consumed.
 
 ## Health metrics
 

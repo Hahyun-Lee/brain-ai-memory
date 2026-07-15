@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot cumulative deterministic contract recovery for the public runtime."""
+"""Plot cumulative contract recovery for the ten ablated mechanisms."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def main() -> int:
             "atl_semantic": "ATL\nsemantic",
             "hc_episodic": "HC\nepisodic",
             "ips_state": "IPS\nexact state",
-            "th_gate": "TH\ninput gate",
+            "th_gate": "TH\naction gate",
             "bg_rules": "BG\nrules",
             "cb_sequence": "CB\nfallback",
             "consolidation": "Consolidate",
@@ -79,7 +79,7 @@ def main() -> int:
         )
 
     ax.set_title(
-        "Each added software contract recovers its designed behavior",
+        "Each added mechanism recovers its authored contracts",
         loc="left",
         color=navy,
         fontsize=22,

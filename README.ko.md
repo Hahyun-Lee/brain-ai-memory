@@ -1,22 +1,35 @@
 [English](README.md) | **한국어**
 
-# Brain-AI Memory
+# Brain-AI Memory — 장기 실행 에이전트를 위한 메모리 관리
 
-> **에이전트가 올바른 기억을 찾았습니다. 그런데도 잘못 행동했습니다.**
+> **검색은 text를 찾습니다. Memory management는 무엇을 유지하고, 갱신하고,
+> 다음 session에 전달할지 결정합니다.**
 
-Brain-AI Memory는 여러 세션에 걸쳐 일하는 에이전트를 위한 local control
-layer입니다. 기억을 **사건·지식·규칙·정확한 상태·실행 절차**로 구분하고,
-stable entity에 연결한 뒤 행동을 검사하고, fallback을 끝까지 수행하고,
-오래된 기억을 갱신합니다.
+Brain-AI Memory는 여러 session에 걸쳐 작동하는 agent를 위한 설치 가능하고
+local·provider-neutral한 **typed operational memory reference kernel**입니다.
+Host가 선택한 record를 episodic event, semantic knowledge, procedural rule,
+exact state로 저장하고, stable entity와 source label에 연결하며, scoped recall,
+consolidation, supersession, lifecycle decision, handoff primitive를 제공합니다.
 
-또 하나의 vector database가 아닙니다. 기존 model, RAG, tool, workflow
-engine은 그대로 두고, 검색만으로 충분하지 않은 지점에 연결합니다.
+기존 model, RAG, vector store, tool, workflow engine은 그대로 사용하세요.
+Brain-AI Memory는 retrieval만으로 결정할 수 없는 것, 즉 record의 memory type,
+소속, 현재 active 여부, 다음에 어떤 형태가 되어야 하는지를 관리합니다.
 
-**문제의 본질은 저장 용량이 아니라 행동의 연속성입니다.** 다음 세션이 올바른
-entity, 최신 사실, 정확한 값, 적용할 규칙, 완료할 절차를 사용하고, 실행 후
-memory를 더 나은 상태로 남기는지가 핵심입니다.
+Optional **memory-to-action bridge**는 proposed action을 검사하고 host-supplied
+fallback sequence를 실행할 수 있습니다. 이 bridge는 managed memory를 소비하지만
+memory manager 자체는 아닙니다.
 
-## 1분 만에 문제와 해결 확인하기
+**핵심 문제는 memory continuity입니다.** 모든 오래된 trace를 똑같이 현재로
+취급하지 않으면서 다음 session이 올바른 entity, 현재 knowledge, exact state,
+적용 가능한 procedure, source, 미해결 작업을 재구성할 수 있어야 합니다.
+
+> **Public alpha의 범위.** 이 package는 structured local store, entity-scoped
+> candidate recall bundle, 저장 entry의 lifecycle state, audit, checkpoint를
+> 담당합니다. Transcript 수집, 선택과 ingestion, token budget에 맞춘 model
+> context 구성, autonomous scheduling, 물리적 보존·삭제, production action
+> enforcement는 여전히 host가 담당합니다.
+
+## 1분 만에 managed lifecycle 확인하기
 
 API key, model call, database server, 외부 service가 필요하지 않습니다.
 
@@ -31,47 +44,92 @@ brain-ai tour
 ```
 
 ```text
-Brain-AI Memory · failure → controlled outcome
+Brain-AI Memory · managed memory → optional control → durable handoff
 1  BIND     Atlas 2.1 → belongs_to → Atlas
 2  RECALL   Atlas 2.1 release day is Thursday.
 3  STATE    open_reviews = 3
 4  GUARD    blocked — release approval is required before production deployment
 5  FALLBACK completed after 2 attempts
 6  UPDATE   old fact → superseded by → new fact
-✓  HANDOFF  checkpoint created
+✓  HANDOFF  checkpoint <id>
 ```
 
-일반 retriever도 이 예제의 release note를 찾을 수 있습니다. 그러나 그것만으로
-작업이 끝나지는 않습니다. 에이전트는 최신 사실을 사용하고, 정확한 숫자를
-추측하지 않고 읽고, release rule을 지키고, 등록된 fallback을 완료하고, 다음
-세션에 올바른 상태를 남겨야 합니다. 모든 결과는 `./.brain-ai/`에서 확인할 수
-있습니다.
+Memory-management 경로는 `BIND → RECALL/STATE → UPDATE → HANDOFF`입니다.
+Entity-scoped episode를 recall하고, stale knowledge를 supersede하고, exact state를
+보존하며, 다음 session을 위한 durable checkpoint를 만듭니다. `GUARD → FALLBACK`은
+optional memory-to-action bridge를 보여줍니다. 두 경로의 결과는 모두
+`./.brain-ai/`에서 확인할 수 있습니다.
 
 ## 누가 사용해야 하나?
 
 | 대상 | 적합성 |
 |---|---|
-| Codex·Claude Code 고급 사용자 | **적합** — 여러 세션·프로젝트에 걸친 반복 작업에 durable state, rule, handoff가 필요할 때 |
-| agent·workflow·연구 도구 개발자 | **가장 핵심적인 사용자** — host loop에 context, gate, execution, lifecycle을 연결할 수 있음 |
-| 감사 가능한 local agent를 운영하는 팀 | **적합** — inspectable control layer로 사용하며 production hardening은 별도 필요 |
+| agent·workflow·연구 도구 개발자 | **가장 핵심적인 사용자** — session 간 typed memory, entity scope, source trail, lifecycle, handoff가 필요할 때 |
+| 감사 가능한 local agent를 운영하는 팀 | **적합** — memory 변경과 source를 inspect해야 할 때. production hardening은 별도 필요 |
+| Codex·Claude Code 고급 사용자 | **적합** — recall, remember, consolidation, checkpoint 호출을 명시적으로 구성할 수 있을 때. built-in memory의 drop-in replacement는 아님 |
+| RAG·Obsidian·vector-store 사용자 | **적합** — retrieval은 되지만 scope, staleness, consolidation, session continuity가 해결되지 않을 때 |
 | 더 나은 일회성 대화를 원하는 일반 ChatGPT·Claude 사용자 | **직접 사용할 필요 없음** — 이 기술을 사용한 application을 통해 간접적으로 이용 |
 | one-shot agent 또는 단순 문서 검색 | **대체로 불필요** — 먼저 context나 RAG로 충분한지 확인 |
 
-오래된 사실 재사용, project identity 혼합, 정확한 값 추측, 기록된 규칙 무시,
-fallback 중단, 갱신·보관할 memory를 결정하지 못하는 문제가 반복될 때
+Lifecycle 없이 memory만 계속 커지거나, project identity가 섞이거나, stale
+fact가 active로 남거나, exact state가 prose 속에 묻히거나, 반복 episode가
+knowledge로 바뀌지 않거나, 다음 session이 이전 결정과 source를 복구하지 못할 때
 사용합니다. 이것은 agent를 설정하는 사람을 위한 infrastructure이지 일반
 소비자용 chat application이 아닙니다.
 
 Codex/Claude의 session resume와 built-in memory도 유용합니다. 그것만으로
-문제가 해결된다면 교체하지 마세요. Brain-AI Memory는 operational state를
-provider-neutral하고 typed·inspectable·action-aware하게 여러 agent나 workflow
-사이에서 유지·갱신해야 하는 더 좁은 경우를 위한 것입니다.
+문제가 해결된다면 교체하지 마세요. Brain-AI Memory는 operational memory를
+provider-neutral하고 typed·inspectable·source-labeled·lifecycle-managed한
+상태로 agent나 workflow 사이에 의도적으로 전달해야 하는 더 좁은 경우를 위한
+것입니다.
 
-![Graphical abstract: 혼란스러운 agent의 뒤섞인 history가 input gate를 거쳐 event, knowledge, rule, exact state, executable sequence가 분리된 brain-inspired software runtime으로 들어가고, lifecycle loop가 memory를 versioning·archive한 뒤 같은 agent가 compact하고 승인된 context bundle을 받는 과정](docs/assets/graphical-abstract.png)
+![Graphical abstract: host가 뒤섞인 원시 session evidence에서 일부 record만 선택해 episode, knowledge, relationship, procedure, exact state compartment로 mapping하고 agent는 scoped context를 받으며, 별도의 아래쪽 경로에서는 proposed action만 gate를 거친 뒤 executable sequence가 tool에 도달하는 과정](docs/assets/graphical-abstract.png)
 
-## 기존 에이전트에 연결하기
+**주 경로:** host-selected evidence → managed memory → scoped context.
+**Optional bridge:** proposed action → gate → executable sequence.
 
-MCP interface를 함께 설치합니다.
+## 시스템이 관리하는 것
+
+| Memory-management 책임 | Public alpha가 하는 일 |
+|---|---|
+| selected evidence | host가 명시적으로 보낸 event만 기록. provider transcript는 host-owned raw evidence로 유지 |
+| working-context candidate | entity-scoped, record-count-limited bundle을 재구성하고 host가 자체 token budget 안에 배치 |
+| episodic memory | timestamp event와 entity binding을 append-only source에 보존 |
+| semantic memory | source가 있는 reusable knowledge를 저장하고 stale fact를 supersession으로 versioning |
+| procedural memory | explicit rule을 저장하고 preview·approval 후에만 episode candidate를 승격 |
+| exact state | model이 추정하지 않도록 알 수 있는 값을 typed store에 보존 |
+| lifecycle과 handoff | consolidation, reconsolidation, logical active/inactive decision, audit, checkpoint primitive를 기록 |
+
+Entity relation, source label, 검증된 component ontology는 이 store들을
+가로지릅니다. Runtime은 provider session을 자동 수집하거나, memory를 model
+context에 paging하거나, file을 실제로 compact·split하거나, source byte를
+물리적으로 삭제하지 **않습니다**. `limit`은 token이 아니라 record 수를
+제한합니다. Host integration과 retention의 경계는 아래에 명시합니다.
+
+## Local에서 memory 관리하기
+
+이름이 비슷한 event, fact, value가 다른 scope로 새지 않도록 memory를 project,
+release, person 같은 stable entity에 연결합니다.
+
+```bash
+brain-ai entity add --name "Atlas" --type project --alias A
+brain-ai remember --type episodic --entity Atlas \
+  --text "배포일이 목요일로 변경됐다" --promote semantic
+brain-ai remember --type state --entity Atlas --key open_reviews --value 3
+brain-ai run --entity Atlas \
+  "최근 무엇이 바뀌었고 review가 몇 개 남았나?"
+brain-ai consolidate          # preview
+brain-ai consolidate --apply  # 명시적 승격
+brain-ai checkpoint --summary "release review 완료"
+```
+
+Runtime은 시작할 때 component ontology를 검증합니다. `brain-ai ontology`로
+확인할 수 있으며 canonical schema는
+[`schema/brain_components.yaml`](schema/brain_components.yaml)입니다.
+
+## Optional: managed memory를 에이전트에 연결하기
+
+Optional MCP surface를 설치합니다.
 
 ```bash
 python -m pip install ".[mcp]"
@@ -91,41 +149,29 @@ MCP client에는 다음과 같은 server 설정을 추가합니다.
 }
 ```
 
-Codex CLI·desktop·IDE와 Claude Code는 local MCP server를 지원합니다.
-에이전트는 행동 전에 `brain_context` 또는 `brain_check_action`을 호출하고,
-작업 후에는 사건·상태와 checkpoint를 기록합니다. MCP interface는 보안을
-위해 임의 shell 실행을 노출하지 않습니다. 허용된 행동은 기존 agent나
-workflow engine에서 실행합니다.
+Codex CLI·desktop·IDE와 Claude Code는 local MCP server를 지원합니다. 구성된
+host integration은 scoped recall에 `brain_context`, 선택한 event나 exact state에
+`brain_remember`, handoff에 `brain_checkpoint`를 호출합니다. 승격이 필요하면
+`brain-ai consolidate`를 별도로 preview하고 apply합니다. 이 호출들은
+background에서 자동 실행되지 않습니다.
 
-**연결 자체가 강제는 아닙니다.** MCP는 tool을 사용할 수 있게 하지만,
-`gate.allowed = false`를 실제 중단 조건으로 처리하는 것은 host의 책임입니다.
-결정론적 차단이 필요하면 실행을 `brain-ai harness`로 통과시키거나 host의
-pre-action hook에 verdict를 연결해야 합니다. 그렇지 않으면 MCP gate는
-advisory입니다. [Codex·Claude Code 설정과 integration
-boundary](docs/07-mcp-server.ko.md)를 참고하세요.
+Public runtime은 provider의 native 대화 transcript를 자동 수집·보관하지 않으며,
+이 저장소에는 Claude Code JSONL이나 Codex rollout adapter가 포함되어 있지
+않습니다. 이런 trace는 그 자체로 working memory가 아닌 원시 evidence입니다.
+연결하는 host 또는 custom adapter가 명시적 privacy·retention policy에 따라 보존
+여부와 HC에 mapping할 event를 선택해야 합니다. 원시 trace를 보존한다면
+제자리에서 덮어쓰지 말고 evidence로 유지해야 합니다. Backup, access control,
+encryption, deletion은 host의 책임입니다.
 
-## 내 기억 추가하기
+### Optional memory-to-action enforcement
 
-기억을 project, release, person 같은 stable entity에 연결하면 이름이 비슷한
-사실이나 숫자가 다른 범위에 섞이는 것을 막을 수 있습니다.
-
-```bash
-brain-ai entity add --name "Atlas" --type project --alias A
-brain-ai remember --type episodic --entity Atlas \
-  --text "배포일이 목요일로 변경됐다" --promote semantic
-brain-ai remember --type state --entity Atlas --key open_reviews --value 3
-brain-ai remember --type rule --entity Atlas \
-  --pattern 'deploy\s+production' --text "release 승인이 필요하다"
-brain-ai run --entity Atlas --action "deploy production" \
-  "최근 무엇이 바뀌었고 review가 몇 개 남았나?"
-brain-ai consolidate          # preview
-brain-ai consolidate --apply  # 명시적 승격
-brain-ai checkpoint --summary "release review 완료"
-```
-
-Runtime은 시작할 때 component ontology를 검증합니다. `brain-ai ontology`로
-확인할 수 있으며 canonical schema는
-[`schema/brain_components.yaml`](schema/brain_components.yaml)입니다.
+같은 MCP surface가 `brain_check_action`도 노출하지만 임의 shell execution은
+의도적으로 제공하지 않습니다. 허용된 action의 실행은 host 책임입니다. MCP
+연결만으로 enforcement가 되지 않으며, host가 `gate.allowed = false`를 실제 중단
+조건으로 소비해야 합니다. 결정론적 차단이 필요하면 실행을 `brain-ai harness`로
+통과시키거나 verdict를 host pre-action hook에 연결하세요. Entity-bound rule을
+적용해야 할 때는 `--entity`를 전달합니다. [Codex·Claude Code
+설정과 integration boundary](docs/07-mcp-server.ko.md)를 참고하세요.
 
 ## 왜 뇌의 기능 분화에서 착안했나?
 
@@ -136,22 +182,23 @@ Runtime은 시작할 때 component ontology를 검증합니다. `brain-ai ontolo
 주장이 아닙니다. 비유가 유용하지 않다면 label을 버리고 contract만 사용해도
 됩니다. [mapping과 그 한계](docs/01-the-mapping.md)를 함께 공개합니다.
 
-> **근거의 경계.** 공개 runtime과 deterministic ablation은 software
-> contract들이 서로 다른 책임을 실행함을 검증합니다. Brain inspiration이 더
-> 좋은 LLM 답변의 원인이라거나 이 시스템이 RAG를 end-to-end로 능가한다는
-> 증거는 아닙니다. [근거와 한계](#근거-현황)
+> **근거의 경계.** Runtime test는 package의 일부 동작을 검증하고,
+> deterministic ablation은 테스트한 열 가지 lifecycle/control mechanism의
+> authored contract만 분리해 검증합니다. 모든 package surface를 ablation했다거나,
+> brain inspiration이 더 좋은 LLM 답변의 원인이라거나, 이 시스템이 RAG를
+> end-to-end로 능가한다는 증거는 아닙니다. [근거와 한계](#근거-현황)
 
-## 이미 겪고 있는 실패부터 진단하세요
+## Memory-management failure부터 진단하기
 
 여러 세션에 걸쳐 동작하는 코딩, 연구, 운영, 비서 에이전트를 만들고 있으며
 다음 중 하나라도 익숙하다면 살펴볼 가치가 있습니다.
 
-- "이미 기록했는데 왜 에이전트가 다시 묻지?"
-- "검색된 메모는 관련은 있지만 이제 사실이 아닌데?"
-- "prompt에 규칙이 있는데도 왜 위반했지?"
-- "fallback 절차를 알고 있었는데 첫 단계만 시도하고 멈췄다."
-- "context와 vector store를 더했지만 실패 원인은 여전히 진단하기 어렵다."
-- "메모리 파일만 계속 커지고 무엇을 compact하거나 지워야 할지 모르겠다."
+- "그 결정을 기록했는데 왜 다음 session이 재구성하지 못하지?"
+- "검색된 note는 관련 있지만 이미 supersede됐다."
+- "이 event는 다른 project나 entity에 속한다."
+- "같은 lesson이 반복됐지만 reusable knowledge가 되지 않았다."
+- "exact value가 있는데도 model이 prose에서 추정했다."
+- "memory index만 계속 커지고 무엇을 consolidate·archive·retain할지 모른다."
 
 지속 상태가 없는 단일 턴 챗봇에는 이 아키텍처가 필요하지 않을 가능성이
 큽니다. 문제가 일반적인 문서 검색뿐인 워크플로에도 필요하지 않습니다. 이미
@@ -160,82 +207,108 @@ Runtime은 시작할 때 component ontology를 검증합니다. `brain-ai ontolo
 | 관찰한 문제 | 먼저 진단할 대상 | 가장 작은 유효한 변화 |
 |---|---|---|
 | 확정된 문맥이 사라지거나 잘못된 사건에 연결됨 | 일화 기억(HC) | timestamp가 있는 event/entity binding 추가 |
+| 한 project의 memory가 다른 project로 샘 | entity scope와 relation | record를 stable entity에 bind하고 해당 scope 안에서 query |
 | 검색 결과는 관련 있지만 오래됨 | 의미 기억(ATL) | freshness를 확인하고 충돌 시 reconsolidation |
-| 에이전트가 규칙을 알지만 무시함 | 절차 규칙(BG) | 반복 위반을 prose에서 guard로 승격 |
-| 여러 단계의 fallback이 중간에 멈춤 | 절차 실행(CB) | sequence를 실행 가능한 harness로 이동 |
+| 반복 episode가 reusable knowledge나 procedure가 되지 않음 | consolidation | explicit preview/approval promotion 경로 추가 |
+| old fact와 new fact가 동시에 active로 남음 | reconsolidation | old row와 source link를 유지하며 stale record를 supersede |
 | 정확히 알 수 있는 수치를 추측함 | 수치 상태(IPS) | 추정 대신 exact store 조회 |
-| 작업이 잘못된 store나 tool로 전달됨 | 오케스트레이션(PFC) | routing 결정을 추적하고 수정 |
-| 항상 로드되는 index가 계속 커짐 | 메모리 생명주기 | 짧은 pointer만 유지하고 detail은 archive 또는 migrate |
+| 항상 로드되는 index가 계속 커짐 | memory lifecycle | bounded index를 유지하고 archive/migration decision을 기록 |
+| 다음 session이 이전 결정을 이어가지 못함 | checkpoint와 handoff | scoped summary와 pending lifecycle candidate를 보존 |
 
 이 기능들은 그림을 만들기 위해 고안한 것이 아닙니다. 지속적이고 다중
-프로젝트인 에이전트 시스템을 실제 운영하면서 memory, semantic retrieval,
-guard, executable workflow의 실패를 디버깅하는 과정에서 분리됐습니다. 아래
+프로젝트인 에이전트 시스템을 실제 운영하면서 memory, retrieval, lifecycle,
+session handoff의 실패를 디버깅하는 과정에서 분리됐습니다. 아래
 근거에서는 이 운영 기록을 인과 주장 및 benchmark 주장과 구분합니다.
 
-## RAG, hook, harness, loop와 어떻게 다른가요?
+### Optional downstream failure
 
-**모두 사용하지만 어느 하나를 새 이름으로 부르는 것은 아닙니다.** 이들은
-구현 메커니즘입니다. Brain-AI Memory는 각 메커니즘에 역할, 실패 조건,
-feedback loop가 실제로 닫혔는지 확인하는 검사를 부여하는 진단·생명주기
-계층입니다.
+Memory의 scope와 current state를 먼저 바로잡은 뒤에는 memory-to-action bridge가
+다른 종류의 failure를 다룰 수 있습니다.
 
-| 기존 방법 | 답하는 질문 | 그 자체만으로 답하지 못하는 질문 |
+| 관찰한 문제 | Bridge component | 가장 작은 유효한 변화 |
 |---|---|---|
-| long context 또는 memory file | 모델이 지금 무엇을 읽을 수 있는가? | 이후 무엇을 이동, 만료, 분리하거나 계속 접근 가능하게 둘 것인가? |
-| RAG 또는 vector store | 어떤 저장 text가 query와 유사한가? | 최신인가, 어느 memory type이 소유하는가, rule로 바뀌어야 하는가? |
-| hook | 언제 code가 event를 검사하거나 가로챌 수 있는가? | 어떤 policy가 들어가야 하며 여러 단계의 결과가 끝까지 완료됐는가? |
-| guard | 이 한 행동을 허용해야 하는가? | fallback sequence를 어떻게 끝까지 실행할 것인가? |
-| harness 또는 workflow engine | 이 절차를 어떻게 실행할 것인가? | 이후 어떤 지식을 recall, update, consolidate할 것인가? |
-| evaluator 또는 retry loop | 한 번 더 실행해야 하는가? | 무엇이 세션 간 지속되며 반복 실패가 시스템을 어떻게 바꾸는가? |
-| Brain-AI Memory | 어느 subsystem이 실패했고 어떤 mechanism과 lifecycle operation이 맞는가? | public alpha가 local reference runtime을 제공하며 production scale, model client, 조직 policy는 사용자가 연결 |
+| recall한 rule이 execution에서 무시됨 | procedural rule consumption(BG) | 저장 rule을 deterministic action check에 연결 |
+| fallback sequence가 첫 실패 후 중단됨 | procedural execution(CB) | sequence를 executable harness로 이동 |
+| 올바른 memory bundle이 unsafe action으로 이어짐 | routing과 proposed-action gate(PFC/TH) | host execution boundary에서 gate verdict를 소비 |
 
-Hook은 연결 지점입니다. Guard는 그 지점에 연결된 허용/차단 판단입니다.
-Harness는 sequence를 소유하고, loop는 verdict를 다시 그 sequence에
-반영합니다. 서로 관련은 있지만 대체 가능하지 않으며, 어느 하나도 완전한
-메모리 아키텍처는 아닙니다.
+## 이것이 단순 RAG나 harness가 아니라 memory management인 이유
 
-### 기여: 원시 요소의 발명이 아니라 구분된 통합
+관련 text를 찾는 일은 필요하지만 memory system 안의 operation 하나일 뿐입니다.
+Session을 넘는 더 어려운 질문은 *이 record는 무엇인지, 어디에 속하는지, 아직
+current인지, reusable knowledge나 rule이 될 수 있는지, 다음 session에 무엇을
+전달해야 하는지*입니다. Brain-AI Memory는 이 decision을 명시적이고 inspectable하게
+만듭니다.
 
-정확한 주장은 **원시 요소의 발명이 아니라 구분된 통합**입니다. Working,
-episodic, semantic, procedural memory 범주는 이미 확립된 개념이고, RAG,
-hook, workflow harness, evaluator, compaction도 기존 기술입니다.
+| 기존 방법 | 제공하는 것 | Memory management에 여전히 필요한 것 |
+|---|---|---|
+| long context 또는 memory file | model이 지금 읽을 수 있는 text | type, scope, active version, promotion, retention decision, handoff |
+| RAG 또는 vector store | query와 유사한 candidate text | entity binding, freshness, exact state, consolidation, supersession, source/version link |
+| entity model, ontology, relational/graph DB | identity와 structured relationship | 어느 record가 episode·knowledge·rule·state로 동작하며 session 간 어떻게 변하는지 |
+| hook, guard, harness, retry loop | interception, action policy, sequence execution, 재시도 | 이 mechanism이 소비·생성하는 memory의 ownership과 lifecycle |
+| Brain-AI Memory | typed local store, entity scope, active-view recall, explicit promotion/update decision, audit, handoff | raw evidence, model-context assembly, scheduling, physical retention, production policy는 host가 제공 |
 
-이 저장소의 기여는 이들을 연결하는 운영 계약입니다.
+따라서 entity와 relation 지원은 core의 일부지만 local identity-and-scope
+layer이며, domain ontology reasoner나 production database의 대체제가 아닙니다.
+RAG는 semantic retrieval backend로 유지할 수 있고, hook은 이 kernel을 호출할 수
+있으며, harness는 procedural memory를 소비할 수 있습니다. 이 mechanism 중 어느
+하나도 그 자체로 전체 memory lifecycle을 소유하지 않습니다.
 
-- 모든 component는 서로 다른 failure mode와 diagnostic을 명시해야 합니다.
-- 절차 **규칙**(BG)과 절차 **실행**(CB)을 분리합니다. 한 행동을 막는 것과
-  fallback sequence를 완료하는 것은 서로 다른 mechanism이 필요합니다.
-- exact numerical state(IPS)와 preventive input gating(TH)을 일반적인
-  'memory' 안에 숨기지 않고 명시적으로 모델링합니다.
-- consolidation과 reconsolidation은 episode가 재사용 가능한 knowledge가
-  되거나 stale knowledge가 갱신되는 방법을 규정합니다.
-- 모든 memory entry에는 keep, compact, archive, migrate to knowledge,
-  migrate to rules, delete, split 중 하나의 lifecycle operation을 부여합니다.
-- component의 존재와 **loop closure**를 따로 감사합니다. rule file, hook,
-  vector index가 존재한다는 사실만으로 결과가 end-to-end로 소비된다고 볼 수
-  없습니다.
+### Optional control bridge
 
-Brain mapping은 이 failure class들을 섞지 않기 위한 engineering analogy입니다.
-여러분의 stack에서 진단을 개선하지 못한다면 analogy는 버리고 contract만
-사용해도 됩니다. 이런 점에서 hook library, retriever, workflow engine과
-범위가 다르지만, 통합 시스템이 더 단순한 대안보다 end-to-end로 우월하다는
-사실은 아직 입증하지 않았습니다.
+Hook은 attachment point이고, guard는 allow/warn/block decision을 반환하며,
+harness는 sequence를 소유하고, loop는 outcome을 다음 attempt에 반영합니다.
+Public package는 저장 rule과 host-supplied procedure step이 action에 영향을 줄
+수 있도록 작은 guard와 fallback implementation도 포함하지만, 실제 enforcement와
+execution은 **memory management의 downstream**이며 host가 결과를 소비해야
+합니다. 이것이 project 이름이 Brain-AI Memory인 이유는 아닙니다.
+
+### 기여: 원시 요소 발명이 아닌 구분된 memory contract
+
+Working, episodic, semantic, procedural memory category와 RAG, entity model,
+hook, workflow harness, evaluator, compaction은 기존 개념과 기술입니다. 이
+저장소의 기여는 failure mode를 뭉개지 않으면서 이들을 연결하는 설치 가능한
+contract입니다.
+
+- PFC는 scoped working-memory candidate를 재구성하고, HC는 episode와 relation을
+  기록하며, ATL은 source가 있는 reusable knowledge를 저장하고, BG는 procedural
+  rule을, IPS는 exact state를 보존합니다.
+- CB는 executable procedure를 rule과 분리합니다. 운영 architecture는 이런
+  harness를 등록할 수 있지만 public alpha는 현재 sequence registry를 소유하는
+  대신 host-supplied fallback step을 받습니다.
+- Consolidation은 episode의 knowledge/rule 승격을 preview하며,
+  reconsolidation은 stale knowledge를 조용히 덮어쓰는 대신 source가 있는
+  superseding version을 만듭니다.
+- 저장 entry에는 keep, compact, archive, migrate to knowledge, migrate to rules,
+  delete, split 중 하나의 explicit lifecycle decision을 줄 수 있습니다. Alpha는
+  host source를 실제로 변환·삭제했다고 가장하지 않고 이 decision과 logical active
+  view를 기록합니다.
+- Checkpoint는 count, pending consolidation candidate, host-written summary를 다음
+  session으로 전달합니다.
+- Optional TH/BG/CB action 경로는 core memory 경로와 별도로 test하여 software
+  conformance를 memory-quality evidence로 잘못 표시하지 않습니다.
+
+Brain mapping은 functional engineering analogy입니다. 진단에 도움이 되면
+유지하고 그렇지 않으면 label을 버리세요. 현재 근거는 실제 운영, 검증한 retrieval
+tradeoff, 서로 다른 software contract를 보여주지만 brain inspiration이나 통합
+system이 더 단순한 memory system을 end-to-end로 능가함을 보여주지는 않습니다.
 
 ## 적용 경로 선택하기
 
-Clean-room public runtime을 실제로 설치할 수 있습니다. 통합 local loop에서
-시작하거나, 현재 failure와 맞는 component만 채택하세요.
+Clean-room public kernel을 실제로 설치할 수 있습니다. Memory failure 하나에서
+시작하고 필요한 경우에만 optional action path를 추가하세요.
 
 | 목표 | 시작점 | 첫 성공 기준 |
 |---|---|---|
-| 기존 agent에 control layer 연결 | [한국어 MCP server](docs/07-mcp-server.ko.md) | `brain_context`가 scoped memory와 deterministic gate verdict 반환 |
-| differentiated lifecycle 전체 실행 | [`brain-ai` runtime](docs/05-runtime.ko.md) | local에서 install, run, checkpoint 후 routed trace 확인 |
+| package를 local에서 확인 | `brain-ai tour` | `.brain-ai/`에서 entity binding, current fact, exact state, update, checkpoint 확인 |
+| agent에 typed memory 추가 | [`brain-ai` runtime](docs/05-runtime.ko.md)의 `entity`, `remember`, `run` | 이름이 비슷한 두 project가 각자의 active memory만 반환 |
+| 기존 memory file에 lifecycle 추가 | `consolidate`, `supersede`, `lifecycle`, `checkpoint` | promotion을 preview하고 stale knowledge를 versioning하며 handoff 기록 |
 | Obsidian / Smart Connections 연결 | [semantic adapter](docs/06-adapters-and-observer.ko.md) | v1·v2 response를 처리하고 v2 hybrid ranking을 BM25 중복 없이 보존 |
-| 비공개 인프라 없이 loop 관찰 | [clean-room observer](docs/06-adapters-and-observer.ko.md#clean-room-command-center) | localhost에서 component count와 audit event 확인 |
-| 반복되는 결정론적 위반 하나 차단 | [behavioral guard](templates/hooks/behavioral-guard.py) | 위험한 pattern은 차단되고 유사한 안전 행동은 통과 |
-| 차단 없이 판단 검사를 표면화 | [self-check trigger](templates/hooks/self-check-trigger.py) | 의도한 context에서만 warning 발생 |
+| local state와 handoff inspect | [clean-room observer](docs/06-adapters-and-observer.ko.md#read-only-reference-observer) | localhost에서 store count, recent audit event, latest checkpoint 확인 |
+| Codex·Claude Code·다른 host에 scoped memory 전달 | [한국어 MCP server](docs/07-mcp-server.ko.md) | host가 `brain_context`를 명시적으로 호출하고 selected record를 주입하며 outcome·checkpoint 기록 |
+| action 시점에 저장 procedure enforce | `brain-ai harness --entity ...` 또는 [behavioral guard](templates/hooks/behavioral-guard.py) | entity-scoped unsafe pattern이 실제 execution boundary에서 차단 |
+| host-supplied fallback sequence 실행 | `brain-ai sequence --entity ...` | 성공·차단·소진까지 attempt가 계속되고 trace가 audit됨 |
 | index가 두 번째 database가 되는 것 방지 | [memory skeleton](templates/memory/MEMORY.skeleton.md) | topic당 한 줄짜리 link만 항상 로드됨 |
-| 무엇을 유지하거나 이동할지 결정 | [seven-operation helper](templates/memory/7-op-decision.md) | 검토한 모든 entry가 정확히 하나의 operation을 받음 |
+| 무엇을 유지하거나 이동할지 결정 | [seven-operation helper](templates/memory/7-op-decision.md) | 모든 review entry가 하나의 recorded decision을 받고 host transformation 경계가 명확함 |
 | 채택 전에 아키텍처 평가 | [mapping](docs/01-the-mapping.md)과 [evidence](evidence/README.md) | 실제 failure를 component에 mapping하거나 맞지 않는 지점을 식별 |
 
 Hook은 Python 표준 라이브러리만으로 self-test할 수 있습니다.
@@ -245,28 +318,66 @@ python3 templates/hooks/behavioral-guard.py --selftest
 python3 templates/hooks/self-check-trigger.py --selftest
 ```
 
-## 아키텍처 동작 방식
+## Memory architecture 동작 방식
 
-핵심 map은 일곱 개의 기능 component와 두 개의 transfer channel로 구성됩니다.
-전체 근거와 한계는 [상세 mapping](docs/01-the-mapping.md)을 참고하세요.
+Canonical map은 일곱 component의 **cognitive architecture**입니다. 다섯 memory
+role(PFC working/executive, HC episodic, ATL semantic, BG procedural-rule, CB
+procedural-execution)과 두 supporting control/computation role(TH gating, IPS exact
+numerical state)로 구성됩니다. Consolidation과 reconsolidation은 extra component가
+아니라 transfer channel입니다. Public product는 typed memory와 lifecycle을 주로
+다루므로 memory-management kernel이며, supporting control surface가 이를 harness
+library로 바꾸지는 않습니다. Neuroscience 근거와 한계는 [상세
+mapping](docs/01-the-mapping.md)을 참고하세요.
 
-| Component | 에이전트 역할 | 진단하려는 실패 |
-|---|---|---|
-| PFC | orchestrator와 routing | 올바른 capability가 잘못된 store나 tool로 전달됨 |
-| HC | episodic event와 relationship | event가 잘못된 person, time, thread에 binding됨 |
-| ATL | semantic knowledge | 검색 결과가 오래됐거나 출처가 잘못됨 |
-| BG | procedural allow/deny rule | rule은 있지만 작동하지 않음 |
-| CB | executable multi-step harness | procedure가 완료 전에 중단됨 |
-| IPS | exact numerical state | 정확히 알 수 있는 quantity를 추측함 |
-| TH | preventive input gate | 위험한 input이 execution에 도달함 |
+| Layer | Component | Public package의 책임 | 진단하려는 실패 |
+|---|---|---|---|
+| memory role | PFC | query를 candidate store로 routing하고 scoped working-memory candidate 재구성 | 잘못된 store 또는 entity scope 선택 |
+| memory role | HC | episodic event, stable entity, alias, relation, binding | event 누락 또는 잘못된 context에 binding |
+| memory role | ATL | source와 superseding version이 있는 active semantic knowledge | retrieval은 관련 있지만 stale이거나 source가 잘못됨 |
+| memory role | BG | stored procedural rule과 승인된 episode-to-rule promotion | reusable rule을 기록·선택하지 못함 |
+| memory role | CB | executable procedure representation. alpha는 explicit host-supplied step을 실행 | procedure가 prose로 남거나 fallback 완료 전에 중단 |
+| supporting computation | IPS | entity-scoped exact numerical state | 알 수 있는 수치를 prose에서 추측 |
+| supporting control | TH | public runtime에서 execution 전 host-proposed action 검사 | unsafe proposed action이 tool boundary에 도달 |
+| lifecycle channel | consolidation | episode → knowledge/rule promotion을 preview하고 명시적으로 apply | 반복 experience가 reusable memory가 되지 않음 |
+| lifecycle channel | reconsolidation | source가 있는 superseding semantic version 생성 | stale·current knowledge가 동시에 active로 남음 |
+
+Mapping에서 TH inspiration은 더 넓은 input gating입니다. Clean-room runtime은
+실제로 test하는 더 좁고 관찰 가능한 형태, 즉 proposed-action check를 구현합니다.
+Model의 전체 prompt나 provider input을 filter한다고 주장하지 않습니다.
+
+### Host-owned closed loop
+
+Public package는 kernel operation을 제공하지만 이 loop를 background에서 실행하지
+않습니다. 완전한 host integration은 다음 단계를 명시적으로 수행합니다.
+
+1. **선택:** native transcript를 host-owned evidence로 보존하고 durable
+   operational memory로 만들 record만 선택합니다.
+2. **Bind·write:** memory type, entity, source label, 필요한 exact value와 함께
+   `brain_remember`/`brain-ai remember`를 호출합니다.
+3. **Recall·assemble:** `brain_context`/`brain-ai run`을 호출하고 host가 반환된
+   candidate bundle을 자체 token budget과 model context에 맞춥니다.
+4. **행동:** host policy로 실행하고 필요하면 entity-scoped gate 또는
+   `harness`/`sequence` bridge를 소비합니다.
+5. **Outcome 기록:** 선택한 결과를 episode나 exact state로 기록합니다.
+6. **Lifecycle 검토:** promotion preview/apply, stale knowledge supersession,
+   archive·split·compact·migration·logical-delete decision을 기록합니다.
+7. **Handoff:** checkpoint를 기록하고 다음 session이 이를 소비하게 합니다.
+
+현재 package는 호출되는 primitive와 audit trail을 구현하지만 automatic transcript
+adapter, scheduler, token-budget assembler, physical archive/delete engine,
+checkpoint acknowledgement protocol은 구현하지 않습니다. 따라서 MCP server를
+연결한 것만으로 loop가 닫히지 않습니다. Raw trace를 찾는 것, episode를 선택하는
+것, candidate memory를 assemble하는 것, consolidate하는 것은 서로 다른
+operation입니다. Representation과 handoff contract는 [memory
+lifecycle](docs/02-memory-lifecycle.ko.md)을 참고하세요.
 
 ![Memory lifecycle: recall, 세션 중 tagging, consolidation, 일곱 가지 lifecycle operation](docs/assets/memory-lifecycle.svg)
 
 ## 근거 현황
 
-Brain-AI Memory에는 longitudinal operation, within-system retrieval test,
-reproducible public-data evaluation이라는 서로 다른 세 가지 근거 계층이
-있습니다. 이들은 서로 다른 질문에 답하며 하나의 headline으로 합치면 안 됩니다.
+Brain-AI Memory는 운영 노출, primary memory-management evaluation, supporting
+software conformance, 아직 없는 evidence라는 네 가지 근거 계층을 구분합니다.
+이들은 서로 다른 질문에 답하며 하나의 headline으로 합치면 안 됩니다.
 
 | 질문 | 현재 근거 |
 |---|---|
@@ -277,31 +388,11 @@ reproducible public-data evaluation이라는 서로 다른 세 가지 근거 계
 | 공개 benchmark에서 stack-aligned retrieval을 비교했는가? | **예. LoCoMo retrieval HIT@10: GTE 62.1%, BM25 57.0%, graph-lite 51.9%; answerable questions n=1,531** |
 | compact pointer index가 full append-only entry보다 더 많이 들어가는가? | **예. 결정론적 capacity simulation** |
 | 단순 compact pointer가 공개 데이터에서 retrieval quality를 보존하는가? | **아니요. 현재 keyword pointer는 recall과 size를 교환함** |
-| 공개 runtime의 각 component가 서로 다른 contract를 실행하는가? | **Deterministic ablation: 전체 runtime 20/20, flat retrieval control 1/20. Flat control도 memory query 6/6에서 예상 top text를 찾았으며, 이는 conformance이지 LLM efficacy가 아님** |
 | lifecycle이 실제 LLM agent의 answer accuracy를 개선하는가? | **아직 측정하지 않음** |
 | 전체 아키텍처가 RAG, long context 또는 다른 memory system보다 나은가? | **아직 측정하지 않음** |
 | latency, token cost, conflict resolution, abstention이 개선되는가? | **아직 측정하지 않음** |
 | single-owner multi-project deployment가 얼마나 일반화되는가? | **알 수 없음. 다기관 반복 검증 없음** |
-
-### 공개 runtime component ablation
-
-설치 가능한 package를 20개의 deterministic contract case와 21개 condition에서
-평가했습니다. 조건은 flat retrieval control, 10개의 누적 addition, 10개의
-leave-one-out removal입니다. LLM, 외부 API, 비공개 data, 외부 judge는 사용하지
-않았습니다.
-
-![누적 component-contract ablation: flat control은 20개 중 1개, 전체 public runtime은 20개 contract 모두 충족](docs/assets/component-ablation.png)
-
-전체 runtime은 작성된 contract 20/20을 충족했고 flat control은 1/20을
-충족했습니다. 중요한 점은 flat control도 memory query 6/6에서 예상 top text를
-모두 찾았다는 것입니다. 낮은 전체 점수는 text retrieval 실패가 아니라 typed
-routing, exact state, gate, fallback sequence, lifecycle contract의 부재를
-반영합니다. 각 component를 누적했을 때 지정된 case가 복구됐고, 전체에서 하나를
-제거했을 때 해당 case가 실패했습니다. 이는 공개 component들이 서로 다른
-software responsibility를 실행한다는 근거이며, 뇌에서 영감을 받았다는 사실
-자체가 answer quality를 높인다거나 전체 아키텍처가 RAG보다 우월하다는 근거는
-아닙니다. [Report, raw record 420개, summary,
-manifest](benchmarks/pilots/component-ablation-20260715/README.md)를 확인하세요.
+| Ablation한 열 가지 memory/lifecycle·optional-control mechanism이 작성된 contract를 실행하는가? | **Supporting conformance만 해당. all-ten condition 20/20, flat retrieval control 1/20. Flat control도 memory query 6/6에서 예상 top text를 찾음** |
 
 ### 실제 운영 배포
 
@@ -381,10 +472,34 @@ Falsifier와 한계는 [evidence note](evidence/README.md)를 참고하세요. R
 있습니다. Controlled reader-model protocol이 실행되기 전에는 end-to-end QA
 result table을 추가하지 않습니다.
 
+### Secondary: memory-to-action contract verification
+
+Memory-performance scoreboard와 별도로 설치 가능한 package를 20개의
+deterministic contract case와 21개 condition에서 평가했습니다. 조건은 flat
+retrieval control, 10개의 cumulative addition, 10개의 leave-one-out
+removal입니다. LLM, 외부 API, 비공개 data, 외부 judge는 사용하지 않았습니다.
+
+![누적 mechanism-contract ablation: flat control은 작성된 contract 20개 중 1개, 테스트한 열 가지 mechanism을 모두 켠 condition은 20개 모두 충족](docs/assets/component-ablation.png)
+
+All-ten condition은 작성된 contract 20/20을, flat control은 1/20을
+충족했습니다. 중요한 점은 flat control도 memory query 6/6에서 예상 top text를
+모두 찾았다는 것입니다. 낮은 총점은 text retrieval 실패가 아니라 typed routing,
+exact state, gate, fallback sequence, lifecycle contract의 부재를 반영합니다. 각
+cumulative addition은 지정된 case를 복구했고, 각 leave-one-out removal은 해당
+case를 실패하게 했습니다.
+
+이는 테스트한 열 가지 software responsibility가 서로 구분되고 실행 가능함을
+검증합니다. Answer quality, autonomous lifecycle management, RAG 대비 우월성을
+측정하지는 않습니다. [Report, raw record 420개, summary,
+manifest](benchmarks/pilots/component-ablation-20260715/README.md)를 확인하세요.
+
 ## 다음 외부 검증
 
-다음 release-grade QA 비교에서는 reader model, prompt, context budget, dataset
-split, scoring procedure를 고정하고 다음 조건을 비교합니다.
+가장 중요한 미확보 evidence는 controlled end-to-end memory-management QA
+비교입니다. 같은 reader와 budget에서 agent가 더 안정적으로 retain, retrieve,
+update, scope, abstain, resume할 수 있는지를 확인해야 합니다. 다음 release-grade
+run은 reader model, prompt, context budget, dataset split, scoring procedure를
+고정하고 다음 조건을 비교합니다.
 
 1. external memory 없음
 2. append-only 또는 full-history memory
@@ -402,6 +517,25 @@ retrieval, test-time learning, long-range understanding, conflict resolution을
 
 완전한 per-item output, cost와 latency report, controlled baseline,
 reproducible run manifest 없이는 top-line performance claim을 추가하지 않습니다.
+
+## Capability roadmap
+
+Public alpha는 작동하는 kernel이지만 아직 autonomous closed-loop memory service는
+아닙니다. 구현 순서는 다음과 같습니다.
+
+1. session/message identity, event time, outcome, evidence URI/hash,
+   deduplication을 포함한 provider-neutral ingestion envelope 추가
+2. private provider log를 core에 포함하지 않는 opt-in transcript adapter 하나 제공
+3. 실제 token/byte budget 안에서 candidate memory를 assemble하고 각 record의
+   선택 이유 공개
+4. checkpoint consume/acknowledge/resume와 lifecycle backlog·health metric 추가
+5. explicit compact, split, archive, verified-delete adapter를 제공한 뒤 완전한 host
+   loop를 end-to-end로 test
+
+Production multi-writer locking, authentication, domain-ontology reasoning,
+entity merge/versioning은 이후 hardening 과제입니다. 이들이 구현·검증되기 전의
+정확한 product boundary는 완전 autonomous memory platform이 아니라 **설치 가능한
+memory-management reference kernel**입니다.
 
 ## 기존 연구와의 관계
 
@@ -426,20 +560,20 @@ pilot만으로 전체 아키텍처가 이 시스템들보다 우월하다고 볼
 | 경로 | 내용 |
 |---|---|
 | [docs/01-the-mapping.md](docs/01-the-mapping.md) | 일곱 component와 두 channel |
-| [docs/02-memory-lifecycle.md](docs/02-memory-lifecycle.md) | 일곱 operation, session transfer, health metric |
+| [docs/02-memory-lifecycle.ko.md](docs/02-memory-lifecycle.ko.md) | 네 representation, 일곱 operation, host handoff, health metric |
 | [docs/03-governance-tiers.md](docs/03-governance-tiers.md) | advisory, guarded, enforced tier |
 | [docs/04-principles.md](docs/04-principles.md) | 판단과 연결된 짧은 운영 원칙 |
-| [docs/05-runtime.ko.md](docs/05-runtime.ko.md) | 설치 가능한 CLI, store, routing, harness, lifecycle |
+| [docs/05-runtime.ko.md](docs/05-runtime.ko.md) | 설치 가능한 memory kernel, store, routing, lifecycle, optional action bridge |
 | [docs/06-adapters-and-observer.ko.md](docs/06-adapters-and-observer.ko.md) | Smart Connections 호환과 clean-room Command Center |
 | [docs/07-mcp-server.ko.md](docs/07-mcp-server.ko.md) | provider-neutral MCP tool, resource, 설정, security boundary |
 | [src/brain_ai_memory/](src/brain_ai_memory/) | 공개 Python runtime implementation |
-| [tests/](tests/) | end-to-end runtime과 adapter test |
+| [tests/](tests/) | kernel integration, adapter, supporting contract test |
 | [CHANGELOG.md](CHANGELOG.md) | release change와 evidence boundary |
 | [schema/brain_components.yaml](schema/brain_components.yaml) | machine-readable component ontology |
 | [templates/](templates/) | 복사해 쓸 수 있는 memory, rule, hook skeleton |
 | [examples/](examples/) | synthetic data를 사용하는 작은 실행 예제 |
 | [evidence/](evidence/) | 운영 snapshot, 내부 A/B summary, capacity simulation |
-| [benchmarks/](benchmarks/) | contract A/B, external-data retrieval pilot, release gate |
+| [benchmarks/](benchmarks/) | memory evaluation protocol·pilot과 supporting contract verification |
 
 ## 기여
 

@@ -6,10 +6,20 @@
 > is not a one-to-one anatomical model, a biological simulation, or a claim of
 > homology.
 
-The machine-readable version of everything below lives in [`schema/brain_components.yaml`](../schema/brain_components.yaml).
-This file is the narrative: the *why*.
+The machine-readable component/channel ontology lives in
+[`schema/brain_components.yaml`](../schema/brain_components.yaml). This file adds
+the narrative *why* and states where the public runtime implements a narrower
+contract than the broader engineering analogy.
 
-![Architecture overview: input gating, orchestration, five specialized systems, and two memory channels](assets/architecture-overview.svg)
+The map spans five memory responsibilities, two control responsibilities, and
+two lifecycle channels. In the public package, differentiated stores, scoped
+recall, explicit lifecycle records, and checkpoints form the memory-management
+kernel. Its local proposed-action gate and command-execution helpers are
+optional downstream consumers of those memory contracts. A host can use the
+memory kernel—including procedural memory—without delegating command execution
+to Brain-AI, and connecting MCP alone does not make any control verdict enforced.
+
+![Architecture overview: proposed-action gating, orchestration, five specialized systems, and two memory channels](assets/architecture-overview.svg)
 
 ## Why a mapping at all
 
@@ -75,18 +85,20 @@ diagram.
   └─────┬─────┘   └─────┬──────┘   └────────────┘   └────────────┘   └───────────┘
         │               │
         │ consolidation │           ┌────────────────────────────────────────┐
-        └──────────────►│           │ TH — input gate: filters dangerous      │
-        (episode →      │           │ input before it ever reaches the agent  │
+        └──────────────►│           │ TH — proposed-action gate: evaluates    │
+        (episode →      │           │ an explicit action before execution     │
          knowledge)     │           └────────────────────────────────────────┘
         ◄───────────────┘
          reconsolidation
-        (update stale memory at recall time)
+        (explicit versioned update after conflict)
 ```
 
-In this implementation, the BG- and TH-inspired software roles are
-deterministic allow/deny gates. That determinism is an engineering property of
-the guards, not a claim that the basal ganglia or thalamus are simple Boolean
-valves. The rest depend on orchestrator judgment and stay partly open. Keep that
+In this implementation, the BG- and TH-inspired software roles contribute to one
+deterministic proposed-action verdict. That determinism is an engineering
+property of the rule matcher, not a claim that the basal ganglia or thalamus are
+simple Boolean valves. The bundled CLI harness consumes that verdict before its
+own subprocess call; an external host must wire and consume the verdict itself.
+The rest depend on orchestrator judgment and stay partly open. Keep that
 software asymmetry in mind; it is revisited at the end.
 
 ---
@@ -99,10 +111,11 @@ cortical-subcortical networks. Executive control is not localized to one PFC
 “executive,” and prefrontal cortex also participates in working-memory
 representation.
 
-**Agent analog.** The main agent loop and its routing logic. Given a request, the orchestrator
-decides: is this a fact to look up (semantic), a past event to recall (episodic), a rule to
-enforce (procedural), a number to read exactly (numerical)? It is the part that chooses a store
-rather than being one.
+**Agent analog.** The host agent loop and its routing logic. Given a request, an
+orchestrator decides: is this a fact to look up (semantic), a selected past
+event to recall (episodic), a rule to inspect (procedural), or a number to read
+exactly (numerical)? The public runtime implements a small, auditable routing
+heuristic for recall; it does not replace the host's full executive loop.
 
 **Engineering divergence.** A software orchestrator exposes explicit routes,
 state, and traces. Biological cognitive control is distributed and adaptive,
@@ -126,20 +139,26 @@ experience and its context, supporting later reinstatement. Treating the
 hippocampus as an index to distributed cortical representations is an
 influential theory, not a literal file-index account.
 
-**Agent analog.** The event log and entity graph: an append-only trace of what happened across
-sessions, plus the relationships between the entities involved (this person, that decision, this
-thread). It is *contextual* memory, tied to time and circumstance, unlike semantic memory.
+**Agent analog.** The selected-event log and entity graph: append-only records
+that a host or operator explicitly writes, plus relationships between the
+entities involved (this person, that decision, this thread). It is *contextual*
+memory, tied to a recorded circumstance, unlike semantic memory. The public
+runtime does not automatically ingest or preserve provider transcripts.
 
-**Engineering divergence.** Append-only records, stable IDs, and preserved
-provenance are software guarantees. Biological episodic memory is reconstructive
+**Engineering divergence.** Append-only records, stable IDs, an ingest
+timestamp, and a source label are software guarantees. Evidence-grade
+provenance—such as provider session/message IDs or a raw-evidence hash—must be
+supplied and retained by the host. Biological episodic memory is reconstructive
 and transformable, not an immutable event log.
 
 **Failure mode.** *Broken binding.* The agent acts on a stale prior, re-asks a
 settled question, or fails to connect two events that belong together because
 the contextual record is missing, ambiguous, or linked incorrectly.
 
-**Diagnostic.** When the agent recalls a past event, is the binding intact (right person, right
-thread, right time), or did it stitch together a plausible but false link?
+**Diagnostic.** When the agent recalls a selected event, are its entity binding,
+source label, and ingest timestamp intact, or did the host stitch together a
+plausible but false link? If occurrence time or a provider message is material,
+the host must preserve that evidence outside the current event fields.
 
 ---
 
@@ -151,13 +170,14 @@ Modality-specific representations and semantic control also depend on wider
 temporal, frontal, and parietal networks; the ATL is not the sole place where
 facts “live.”
 
-**Agent analog.** A provenance-bearing concept/fact store over notes,
-documents, and references, optionally indexed with embeddings or lexical
-retrieval. This is where reusable knowledge lives independently of any one
-session.
+**Agent analog.** A source-labeled concept/fact store over notes, documents, and
+references, optionally indexed with embeddings or lexical retrieval. This is
+where reusable knowledge lives independently of any one session. The source
+field is useful audit metadata, not a complete evidence-provenance system.
 
-**Engineering divergence.** A vector index is not a neural homologue. Source,
-freshness, and conflict checks are explicit engineering safeguards.
+**Engineering divergence.** A vector index is not a neural homologue. The public
+runtime preserves source labels and explicit supersession links; freshness and
+conflict detection remain host/operator responsibilities.
 
 **Failure mode.** *Meaning errors and staleness.* Misreading a concept,
 following a dangling link, treating a secondary source as primary, or repeatedly
@@ -175,9 +195,10 @@ contribute to learned action selection, reinforcement and habit learning, and
 gating of motor and cognitive representations. Their operation is
 context-dependent and adaptive, not a deterministic Boolean rule.
 
-**Agent analog.** Rule memory in two forms: *static* (the instruction and config files the agent
-reads) and *dynamic* (deterministic pre-action guards that fire before a tool call). The static
-form is what the agent *should* know; the dynamic form is what actually *stops* it.
+**Agent analog.** Rule memory in two forms: *static* (instructions and stored
+rules an agent can retrieve) and *dynamic* (a deterministic check over an
+explicit proposed-action string). A dynamic verdict stops an action only when
+the bundled CLI harness or an integrating host consumes it before execution.
 
 **Engineering divergence.** Deterministic pre-action guards deliberately
 harden the gating metaphor into an auditable software policy.
@@ -185,9 +206,10 @@ harden the gating metaphor into an auditable software policy.
 **Failure mode.** *Policy enforcement failure.* A declared policy is not
 enforced at action time, or a guard blocks or allows the wrong case.
 
-**Diagnostic.** For each rule you care about, is there a deterministic gate that actually fires,
-or does enforcement rely on the model remembering in the moment? If it relies on memory, it is not
-a rule, it is a hope.
+**Diagnostic.** For each rule you care about, is there a deterministic gate that
+is called with the relevant action and entity, and does the executor consume its
+verdict? A stored rule without that wiring is recallable policy, not enforced
+control.
 
 ---
 
@@ -198,10 +220,10 @@ timing, coordination, and error-based adaptation through cerebro-cerebellar
 loops in motor and some cognitive domains. Evidence for sequence processing
 does not make the cerebellum a general-purpose workflow runner.
 
-**Agent analog.** An executable harness: a script that owns a multi-step procedure, including its
-fallback paths, end to end. The key word is *executable*. A procedure written as prose
-instructions is re-narrated by the model every time and can be quietly dropped mid-loop; the same
-procedure as code runs to completion or fails loudly.
+**Agent analog.** An executable harness: code that owns an explicit command
+sequence and its host-supplied fallback paths. The bundled optional control bridge
+can run one local command or try a finite list until one succeeds, is blocked, or
+the list is exhausted. It does not take over arbitrary host workflows.
 
 **Engineering divergence.** The harness borrows prediction, correction, and
 fluent sequencing as design motifs. Ownership of an arbitrary fallback workflow
@@ -223,7 +245,7 @@ interact within integrated networks.
 
 ---
 
-### IPS — Numerical memory (the intraparietal sulcus)
+### IPS — Exact numerical state and computation (the intraparietal sulcus)
 
 **Neuroscience inspiration.** The intraparietal sulcus is consistently involved
 in quantity and magnitude processing, including approximate number
@@ -231,8 +253,11 @@ representation and some online calculation. Exact verbal arithmetic and
 arithmetic-fact retrieval recruit broader parietal, language, memory, and
 frontal networks.
 
-**Agent analog.** A numerical store: a small queryable mirror for the numbers the agent must not
-estimate: counts, totals, metrics that have a knowable correct value.
+**Agent analog.** A small queryable exact-state store for values the agent must
+not estimate: counts, totals, and metrics with a knowable correct value. The
+stored value is part of the public data plane; the IPS label denotes the
+relational/numerical control responsibility, not a claim that IPS is a separate
+long-term memory system.
 
 **Engineering divergence.** The exact numerical store is a deliberate
 complement, not a replica: because neural and model magnitude representations
@@ -246,34 +271,41 @@ memory? Numbers in agent output should be sourced, not recalled.
 
 ---
 
-### TH — Gating (the thalamus)
+### TH — Proposed-action gating (the thalamus)
 
 **Neuroscience inspiration.** Thalamic nuclei relay and modulate signals and
 help select, amplify, and coordinate task-relevant interactions within
 distributed thalamocortical networks. The thalamus is neither a single
 perimeter filter nor a biological security gateway.
 
-**Agent analog.** A preventive input gate: a pre-action filter on the *input* path that blocks a
-dangerous case before it executes: an unsafe deserialization, an injected instruction, a write
-that should never be permitted.
+**Agent analog.** A preventive check over a proposed action. The public runtime
+matches an explicit action string against built-in and stored regular-expression
+rules and returns allow, warn, or block. It does not inspect arbitrary prompts,
+provider tool traffic, or deserialized payloads unless a host first maps those
+actions into this contract.
 
-**Engineering divergence.** The input gate deliberately translates selective
-routing and gating into a pre-execution security and policy boundary.
+**Engineering divergence.** The proposed-action gate deliberately translates
+selective routing and gating into an auditable pre-execution policy decision.
+The decision becomes a boundary only where an executor is wired to honor it.
 
-**Failure mode.** *Dangerous input passes unfiltered* and the damage is done before anything
-notices.
+**Failure mode.** *Under-gating* occurs when a relevant proposed action is not
+checked, lacks a matching rule, or has a block verdict that the host ignores.
+*Over-gating* occurs when a broad pattern rejects a legitimate action.
 
-**Diagnostic.** Is there a filter on the input path that blocks the bad case
-*before* execution, rather than a cleanup that runs after? By this software
-contract, a preventive gate that only notices afterward has not closed its loop.
+**Diagnostic.** Was the concrete proposed action and, when applicable, its
+entity passed to the gate before execution? Did the executor treat a block as a
+stop condition? A verdict that is merely returned as context has not closed the
+control loop.
 
 ---
 
 ## The two channels
 
-Components store; channels *move*. These are the transfer mechanisms, and they are where a lot of
-real-world agent memory quietly breaks, not because a store is missing, but because nothing ever
-promotes or updates what the stores hold.
+Components name responsibilities: memory components store or recall, while
+control components route, compute, or decide. Channels *move or version stored
+information*. These transfer mechanisms are where agent memory can quietly
+break—not because a store is missing, but because nothing promotes or updates
+what the stores hold.
 
 ### Consolidation — episodic evidence → derived knowledge or rule
 
@@ -283,27 +315,29 @@ replay and sleep can support it, but it is not simply a file transfer from
 hippocampus to cortex, and whether detailed episodic memories remain
 hippocampus-dependent is theory-dependent.
 
-**Agent translation.** Controlled promotion derives a reusable fact, pattern,
-or rule from one or more episodes while retaining the source episode,
-provenance, and links. Preview/apply/audit are deliberate software safeguards.
-Thus episodic → semantic is a lifecycle contract, not a claim to reproduce
-biological systems consolidation. **If this channel never runs**, retrieval can
-return raw episodes without producing reusable lessons, and the agent may
-re-derive the same insight repeatedly.
+**Agent translation.** The public runtime can preview and explicitly apply a
+promotion from one selected episode into a semantic record or a rule whose
+regular-expression pattern was already supplied. It retains the source event
+and records a source link plus lifecycle audit. It neither groups multiple
+episodes into a new abstraction nor schedules promotion automatically. Thus
+episodic → semantic is a lifecycle primitive, not a claim to reproduce
+biological systems consolidation. **If a host never invokes this channel**,
+retrieval can return raw episodes without producing reusable lessons, and the
+agent may re-derive the same insight repeatedly.
 
-### Reconsolidation — versioned update when recall reveals conflict
+### Reconsolidation — explicit versioned update after conflict is identified
 
 **Neuroscience inspiration.** Reactivation can, under some conditions,
 destabilize a consolidated memory and require restabilization. Not every
 retrieval opens a memory for change; memory age, strength, prediction error, and
 reactivation conditions impose boundaries.
 
-**Agent translation.** Retrieval is used as an explicit checkpoint for
-freshness and conflict detection. When policy permits, the system creates a
-versioned superseding update—with approval and audit—rather than mutating an
-opaque trace. This deterministic update policy is an engineering adaptation,
-not a biological reconsolidation model. **If retrieval only ever surfaces the
-most recent entry**, older stale candidates can remain hidden and uncorrected.
+**Agent translation.** The public runtime provides an explicit supersede
+operation that creates a new semantic record linked to the prior record and
+marks the prior record superseded rather than rewriting it in place. Retrieval
+does not currently detect conflict or trigger that operation automatically; the
+host or operator must decide when to call it. This versioned update primitive is
+an engineering adaptation, not a biological reconsolidation model.
 
 ---
 
@@ -312,14 +346,15 @@ most recent entry**, older stale candidates can remain hidden and uncorrected.
 It is tempting to read this mapping as "wire up seven components and two channels and the agent
 runs itself." It does not work that way, and the honest version of the map says so.
 
-Within this software implementation, BG- and TH-inspired guards can close a
-decision loop deterministically. Other components remain partly
-judgment-dependent. This contrast describes the implementation, not the
-determinism of the corresponding biological circuits. The orchestrator's
+Within this software implementation, the BG- and TH-inspired matcher produces a
+deterministic verdict. The local CLI harness closes that narrow loop for the
+subprocesses it starts, including entity-scoped policies when `--entity` is
+supplied. MCP exposes the same verdict but does not force unrelated host tools
+to consume it, so MCP connection alone is advisory. Other components
+remain partly judgment-dependent. This contrast describes the implementation,
+not the determinism of the corresponding biological circuits. The host's
 routing, the decision to verify a citation, and the choice to look up a number
-instead of estimating it can still depend on the model's judgment *in the
-moment*. You can prompt for them, log them, and nudge them, but hardening every
-choice into a Boolean valve would discard useful judgment.
+instead of estimating it can still depend on judgment *in the moment*.
 
 That asymmetry is not a gap to be closed; it is the shape of the problem. Mapping the brain does
 not make a hard problem deterministic. What it does is tell you **which parts are deterministic and

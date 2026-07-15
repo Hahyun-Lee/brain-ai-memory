@@ -11,6 +11,7 @@ import yaml
 
 REQUIRED_COMPONENT_FIELDS = {
     "id",
+    "category",
     "function",
     "construct",
     "store",
@@ -57,6 +58,7 @@ def validate_ontology(data: dict) -> dict:
         raise ValueError("ontology must contain channels")
 
     component_ids: list[str] = []
+    category_counts = {"memory": 0, "control": 0}
     for position, component in enumerate(components):
         if not isinstance(component, dict):
             raise ValueError(f"component {position} must be an object")
@@ -66,6 +68,12 @@ def validate_ontology(data: dict) -> dict:
                 f"component {component.get('id', position)} is missing: {', '.join(sorted(missing))}"
             )
         component_ids.append(str(component["id"]))
+        category = str(component["category"])
+        if category not in category_counts:
+            raise ValueError(
+                f"component {component['id']} has unsupported category: {category}"
+            )
+        category_counts[category] += 1
     if len(component_ids) != len(set(component_ids)):
         raise ValueError("component ids must be unique")
 
@@ -87,6 +95,7 @@ def validate_ontology(data: dict) -> dict:
         "component_ids": component_ids,
         "channel_ids": channel_ids,
         "component_count": len(component_ids),
+        "category_counts": category_counts,
         "channel_count": len(channel_ids),
     }
 

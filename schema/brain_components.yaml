@@ -15,11 +15,14 @@
 # Grounding draws on public neuroscience reviews, but several mappings are
 # theory-dependent. Evidence links state both the inspiration and its limits.
 # The ontology is evaluated as an engineering taxonomy, not a biological model.
+# Category follows the canonical split: five memory responsibilities (PFC, HC,
+# ATL, BG, CB) and two supporting control/computation responsibilities (IPS, TH).
 
-version: 2
+version: 3
 
 components:
   - id: PFC
+    category: memory
     region: prefrontal cortex within distributed control networks
     function: Cognitive control — maintain goals and task rules and bias processing across networks
     neuroscience_inspiration: >
@@ -40,6 +43,7 @@ components:
       decision: which memory did it read, and was that the correct one to read?
 
   - id: HC
+    category: memory
     region: hippocampal formation within medial-temporal/cortical memory networks
     function: Rapid relational and contextual binding and reinstatement
     neuroscience_inspiration: >
@@ -62,6 +66,7 @@ components:
       which thread) intact, or did it confabulate the link?
 
   - id: ATL
+    category: memory
     region: bilateral anterior temporal lobes within a distributed semantic network
     function: Transmodal semantic integration within a wider hub-and-control system
     neuroscience_inspiration: >
@@ -82,6 +87,7 @@ components:
       cited claim against the primary source, or trust the embedding's nearest hit?
 
   - id: BG
+    category: memory
     region: cortico-basal-ganglia-thalamo-cortical circuits
     function: Learned action selection, reinforcement and habit learning, and adaptive gating
     neuroscience_inspiration: >
@@ -102,6 +108,7 @@ components:
       enforcement depend on the model "remembering" in the moment?
 
   - id: CB
+    category: memory
     region: cerebellum within cerebro-cerebellar loops
     function: Prediction, timing, coordination, sequence processing, and error-based adaptation
     neuroscience_inspiration: >
@@ -127,6 +134,7 @@ components:
       both are "procedural."
 
   - id: IPS
+    category: control
     region: intraparietal sulcus within a distributed numerical network
     function: Quantity and magnitude representation and online calculation, often approximate
     neuroscience_inspiration: >
@@ -146,6 +154,7 @@ components:
       estimated from memory?
 
   - id: TH
+    category: control
     region: thalamic nuclei within thalamocortical circuits
     function: Relay and modulate task-relevant signals and coordinate cortical interactions
     neuroscience_inspiration: >

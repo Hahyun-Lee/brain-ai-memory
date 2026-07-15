@@ -1,6 +1,6 @@
 {
-  "benchmark": "Brain-AI public runtime component-contract ablation",
-  "claim_scope": "deterministic component-contract conformance only; not external LLM QA or agent-quality efficacy",
+  "benchmark": "Brain-AI ten-mechanism lifecycle/control contract ablation",
+  "claim_scope": "authored deterministic contracts for ten ablated mechanisms only; not the full package, external LLM QA, or agent-quality efficacy",
   "case_count": 20,
   "condition_count": 21,
   "record_count": 420,
@@ -1108,7 +1108,7 @@
   "component_effects": [
     {
       "feature": "pfc_routing",
-      "label": "PFC · goal-aware component routing",
+      "label": "PFC · query/action-cue routing",
       "cumulative_condition": "cumulative-01-pfc-routing",
       "cumulative_score": 3,
       "newly_recovered_cases": [

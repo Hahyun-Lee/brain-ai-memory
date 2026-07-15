@@ -1,4 +1,4 @@
-"""Provider-neutral MCP surface for the Brain-AI control layer."""
+"""Provider-neutral MCP surface for Brain-AI memory management."""
 
 from __future__ import annotations
 
@@ -134,7 +134,7 @@ def create_mcp_server(
 
     @server.tool(name="brain_supersede")
     def supersede(old_id: str, new_text: str, source: str = "mcp") -> dict:
-        """Version a stale fact while preserving its provenance."""
+        """Version a stale fact while retaining the old row and source link."""
         return runtime.reconsolidate(old_id, new_text, source=source)
 
     @server.resource("brain-ai://status", mime_type="application/json")

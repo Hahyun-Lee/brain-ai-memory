@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -11,6 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "benchmarks" / "run_component_ablation.py"
+RECORDED_ROOT = ROOT / "benchmarks" / "pilots" / "component-ablation-20260715"
+RECORDED_MANIFEST = RECORDED_ROOT / "manifest.json"
 SPEC = importlib.util.spec_from_file_location("component_ablation", RUNNER)
 assert SPEC and SPEC.loader
 ablation = importlib.util.module_from_spec(SPEC)
@@ -70,6 +73,63 @@ class ComponentAblationTest(unittest.TestCase):
             for filename, expected in manifest["artifact_sha256"].items():
                 actual = hashlib.sha256((output / filename).read_bytes()).hexdigest()
                 self.assertEqual(actual, expected)
+            self.assertEqual(
+                manifest["semantic_outcome"]["sha256"],
+                ablation.semantic_outcome_sha256(self.records),
+            )
+            self.assertIn("src/brain_ai_memory/runtime.py", manifest["implementation_sha256"])
+            self.assertIn("schema/brain_components.yaml", manifest["implementation_sha256"])
+
+    def test_current_outcomes_match_recorded_semantic_digest(self):
+        manifest = json.loads(RECORDED_MANIFEST.read_text(encoding="utf-8"))
+        recorded = ablation.load_records(RECORDED_ROOT / "records.jsonl")
+        expected = manifest["semantic_outcome"]["sha256"]
+        self.assertEqual(
+            tuple(manifest["semantic_outcome"]["excluded_fields"]),
+            ablation.SEMANTIC_EXCLUDED_FIELDS,
+        )
+        self.assertEqual(ablation.semantic_outcome_sha256(recorded), expected)
+        self.assertEqual(ablation.semantic_outcome_sha256(self.records), expected)
+        result = ablation.verify_reference(self.records, RECORDED_MANIFEST)
+        self.assertTrue(result["semantic_parity"])
+
+    def test_semantic_digest_excludes_only_documented_diagnostics(self):
+        changed = json.loads(json.dumps(self.records))
+        for row in changed:
+            row["latency_ms"] = row["latency_ms"] + 987.654
+            observed = row.get("observed", {})
+            for name in ("counts_before", "counts_after"):
+                counts = observed.get(name)
+                if isinstance(counts, dict):
+                    counts["entities"] = 999
+                    counts["relations"] = 999
+        self.assertEqual(
+            ablation.semantic_outcome_sha256(changed),
+            ablation.semantic_outcome_sha256(self.records),
+        )
+        changed[0]["passed"] = not changed[0]["passed"]
+        self.assertNotEqual(
+            ablation.semantic_outcome_sha256(changed),
+            ablation.semantic_outcome_sha256(self.records),
+        )
+
+    def test_recorded_source_provenance(self):
+        manifest = json.loads(RECORDED_MANIFEST.read_text(encoding="utf-8"))
+        commit = manifest["repository_commit"]
+        available = subprocess.run(
+            ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+        if available.returncode != 0:
+            self.skipTest("recorded source commit is unavailable in this shallow clone")
+        result = ablation.verify_recorded_source_provenance(RECORDED_MANIFEST)
+        self.assertEqual(
+            result["repository_commit"],
+            "d0d675ead16b96b6f4ac0a5aaab7ddcf20786ba7",
+        )
+        self.assertEqual(result["source_files_verified"], 8)
 
 
 if __name__ == "__main__":

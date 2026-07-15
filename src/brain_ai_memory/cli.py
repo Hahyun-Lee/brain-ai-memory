@@ -23,7 +23,7 @@ def emit(value, as_json: bool = False) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="brain-ai",
-        description="Turn retrieved memory into reliable cross-session agent action",
+        description="Manage typed, scoped memory across long-running agent sessions",
     )
     parser.add_argument("--home", help="runtime directory (default: $BRAIN_AI_HOME or ./.brain-ai)")
     sub = parser.add_subparsers(dest="subcommand", required=True)
@@ -62,6 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     harness.add_argument("--query", required=True)
     harness.add_argument("--timeout", type=float, default=60)
     harness.add_argument("--cwd")
+    harness.add_argument("--entity", help="scope recalled memory and rules to one entity")
     harness.add_argument("--json", action="store_true")
     harness.add_argument("command", nargs=argparse.REMAINDER)
 
@@ -73,6 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sequence.add_argument("--timeout", type=float, default=60)
     sequence.add_argument("--cwd")
+    sequence.add_argument("--entity", help="scope recalled memory and rules to one entity")
     sequence.add_argument("--json", action="store_true")
 
     checkpoint = sub.add_parser("checkpoint", help="record state and consolidation candidates")
@@ -90,7 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     supersede.add_argument("--tags", nargs="*", default=[])
     supersede.add_argument("--json", action="store_true")
 
-    lifecycle = sub.add_parser("lifecycle", help="apply one of seven lifecycle operations")
+    lifecycle = sub.add_parser("lifecycle", help="record one of seven lifecycle decisions")
     lifecycle.add_argument("target_type", choices=("episodic", "semantic"))
     lifecycle.add_argument("target_id")
     lifecycle.add_argument("operation", choices=sorted(LIFECYCLE_OPERATIONS))
@@ -107,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--host")
     dashboard.add_argument("--port", type=int)
 
-    demo = sub.add_parser("demo", help="run an end-to-end local demonstration")
+    demo = sub.add_parser("demo", help="run a local memory-kernel demonstration")
     demo.add_argument("--json", action="store_true")
 
     tour = sub.add_parser(
@@ -242,11 +244,12 @@ def run_tour(runtime: BrainAIRuntime) -> dict:
         entity=release["id"],
     )
     fallback = runtime.execute_sequence(
-        "validate the release with a registered fallback",
+        "validate the release with a host-supplied fallback",
         [
             [sys.executable, "-c", "raise SystemExit(1)"],
             [sys.executable, "-c", "print('fallback validation passed')"],
         ],
+        entity=release["id"],
     )
     checkpoint = runtime.checkpoint("five-minute tour completed")
     state = next(
@@ -272,7 +275,7 @@ def emit_tour(value: dict, as_json: bool) -> None:
     if as_json:
         emit(value, True)
         return
-    print("Brain-AI Memory · failure → controlled outcome")
+    print("Brain-AI Memory · managed memory → optional control → durable handoff")
     print(f"1  BIND     {value['entity']}")
     print(f"2  RECALL   {value['found']}")
     print(f"3  STATE    {value['exact_state']}")
@@ -346,7 +349,16 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.subcommand == "harness":
             command = args.command[1:] if args.command[:1] == ["--"] else args.command
-            emit(runtime.execute(args.query, command, timeout=args.timeout, cwd=args.cwd), args.json)
+            emit(
+                runtime.execute(
+                    args.query,
+                    command,
+                    timeout=args.timeout,
+                    cwd=args.cwd,
+                    entity=args.entity,
+                ),
+                args.json,
+            )
         elif args.subcommand == "sequence":
             steps = []
             for raw in args.step:
@@ -354,7 +366,16 @@ def main(argv: list[str] | None = None) -> int:
                 if not isinstance(step, list) or not step or not all(isinstance(item, str) for item in step):
                     raise ValueError("each --step must be a non-empty JSON array of strings")
                 steps.append(step)
-            emit(runtime.execute_sequence(args.query, steps, timeout=args.timeout, cwd=args.cwd), args.json)
+            emit(
+                runtime.execute_sequence(
+                    args.query,
+                    steps,
+                    timeout=args.timeout,
+                    cwd=args.cwd,
+                    entity=args.entity,
+                ),
+                args.json,
+            )
         elif args.subcommand == "checkpoint":
             emit(runtime.checkpoint(args.summary), args.json)
         elif args.subcommand == "consolidate":

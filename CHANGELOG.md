@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### Added
+
+- machine-readable `memory` versus `control` categories in ontology v3, with
+  startup validation of the canonical five-plus-two split;
+- normalized semantic-outcome parity and recorded-source provenance checks for
+  the ten-mechanism lifecycle/control ablation;
+- a Korean memory-lifecycle guide with the same four-representation and host
+  handoff contract as the English guide; and
+- a pinned `plot` extra plus CI chart-generation smoke coverage.
+
+### Changed
+
+- reposition the public package around its implemented core: a typed,
+  entity-scoped memory-management reference kernel, with guarding and fallback
+  execution documented as an optional downstream bridge;
+- make `harness` and `sequence` consume entity scope so entity-bound procedures
+  cannot be skipped at the execution boundary;
+- separate primary memory evidence from supporting lifecycle/action contract
+  conformance and identify controlled end-to-end lifecycle QA as the main
+  missing benchmark;
+- the graphical abstract and social preview now separate host-selected memory
+  mapping from proposed-action gating;
+- ablation wording now refers to the ten mechanisms actually tested; and
+- define lifecycle `delete` as a recoverable logical tombstone in the reference
+  alpha, with physical erasure delegated to an explicit host retention flow.
+
+### Documentation
+
+- distinguish provider-native raw traces, reconstructed working memory,
+  structured episodes, and approved consolidated memory;
+- define top-down control and bottom-up learning as an explicit host
+  integration contract rather than background runtime automation;
+- document that Claude Code/Codex transcript adapters are not included, plus
+  the host boundary for authorization, ingestion, preserved evidence, access,
+  backup, encryption, retention, and deletion; and
+- publish the capability path from the current reference kernel to a tested,
+  host-integrated closed loop without implying background automation.
+
 ## 0.3.1 — 2026-07-15
 
 ### Fixed
@@ -45,9 +83,10 @@
 
 ### Evidence boundary
 
-The ablation verifies distinct public software contracts. It does not show
-that biological inspiration causes the result, that the runtime improves LLM
-answer quality, or that the architecture beats RAG on an external workload.
+The ablation verifies authored contracts for the ten tested lifecycle/control
+mechanisms. It does not cover every public package surface or show that
+biological inspiration causes the result, that the runtime improves LLM answer
+quality, or that the architecture beats RAG on an external workload.
 
 ## 0.2.0 — 2026-07-15
 

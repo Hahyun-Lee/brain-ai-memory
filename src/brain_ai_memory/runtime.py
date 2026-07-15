@@ -1,4 +1,4 @@
-"""End-to-end reference runtime for the Brain-AI component contracts."""
+"""Reference kernel for Brain-AI memory and supporting component contracts."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ PROCEDURAL_HINTS = re.compile(r"\b(rule|must|never|always|procedure|workflow|fal
 
 
 class BrainAIRuntime:
-    """Provider-neutral control layer; the LLM remains a replaceable executor."""
+    """Provider-neutral memory-management kernel with an optional action bridge."""
 
     def __init__(self, home: str | Path | None = None):
         self.home = resolve_home(home)
@@ -162,10 +162,22 @@ class BrainAIRuntime:
         self.store.append_audit({"event": "process", **result})
         return result
 
-    def execute(self, query: str, command: list[str], *, timeout: float = 60, cwd: str | Path | None = None) -> dict:
+    def execute(
+        self,
+        query: str,
+        command: list[str],
+        *,
+        timeout: float = 60,
+        cwd: str | Path | None = None,
+        entity: str | None = None,
+    ) -> dict:
         if not command:
             raise ValueError("harness command is empty")
-        prepared = self.process(query, proposed_action=" ".join(command))
+        prepared = self.process(
+            query,
+            proposed_action=" ".join(command),
+            entity=entity,
+        )
         if not prepared["gate"]["allowed"]:
             return prepared
         started = time.perf_counter()
@@ -200,6 +212,7 @@ class BrainAIRuntime:
         *,
         timeout: float = 60,
         cwd: str | Path | None = None,
+        entity: str | None = None,
     ) -> dict:
         """Run explicit fallbacks until one succeeds; never rely on model persistence."""
         if not steps:
@@ -208,7 +221,13 @@ class BrainAIRuntime:
         attempts = []
         status = "failed"
         for position, command in enumerate(steps, start=1):
-            result = self.execute(query, command, timeout=timeout, cwd=cwd)
+            result = self.execute(
+                query,
+                command,
+                timeout=timeout,
+                cwd=cwd,
+                entity=entity,
+            )
             attempts.append(
                 {
                     "position": position,
@@ -229,6 +248,7 @@ class BrainAIRuntime:
             "status": status,
             "attempt_count": len(attempts),
             "attempts": attempts,
+            "entity": self.store.get_entity(entity)["id"] if entity else None,
             "created_at": utc_now(),
         }
         self.store.append_audit({"event": "sequence", **output})

@@ -1,22 +1,36 @@
 **English** | [한국어](README.ko.md)
 
-# Brain-AI Memory
+# Brain-AI Memory — Memory Management for Long-Running Agents
 
-> **Your agent found the right memory. It still did the wrong thing.**
+> **Retrieval finds text. Memory management decides what stays, changes, and
+> reaches the next session.**
 
-Brain-AI Memory is a local control layer for agents that work across sessions.
-It separates **events, knowledge, rules, exact state, and executable
-procedures**, then binds them to stable entities, checks actions, completes
-fallbacks, and updates stale memory.
+Brain-AI Memory is an installable, local, provider-neutral **reference kernel
+for typed operational memory** in agents that work across sessions. It stores
+host-selected records as episodic events, semantic knowledge, procedural rules,
+and exact state; binds them to stable entities and source labels; and provides
+scoped recall, consolidation, supersession, lifecycle decisions, and handoff
+primitives.
 
-It is not another vector database. Keep your model, RAG, tools, and workflow
-engine; use Brain-AI Memory where retrieval alone stops being enough.
+Keep your model, RAG, vector store, tools, and workflow engine. Brain-AI Memory
+manages what retrieval alone does not: what kind of memory a record is, what it
+belongs to, whether it is still active, and what it should become next.
 
-**The core problem is behavioral continuity, not storage capacity:** does the
-next session use the right entity, current fact, exact value, applicable rule,
-and complete procedure—and then leave memory in a better state?
+An optional **memory-to-action bridge** can check proposed actions and run a
+host-supplied fallback sequence. That bridge consumes managed memory; it is not
+the memory manager itself.
 
-## See the problem and the fix in one minute
+**The core problem is memory continuity:** can the next session reconstruct the
+right entity, current knowledge, exact state, applicable procedure, source,
+and unresolved work without treating every old trace as equally current?
+
+> **Scope of the public alpha.** This package owns structured local stores,
+> entity-scoped candidate recall bundles, stored-entry lifecycle state, audit,
+> and checkpoints. The host still owns transcript capture, selection and
+> ingestion, token-budgeted model context, autonomous scheduling, physical
+> retention/deletion, and production action enforcement.
+
+## See the managed lifecycle in one minute
 
 No API key, model call, database server, or external service is required.
 
@@ -31,46 +45,90 @@ brain-ai tour
 ```
 
 ```text
-Brain-AI Memory · failure → controlled outcome
+Brain-AI Memory · managed memory → optional control → durable handoff
 1  BIND     Atlas 2.1 → belongs_to → Atlas
 2  RECALL   Atlas 2.1 release day is Thursday.
 3  STATE    open_reviews = 3
 4  GUARD    blocked — release approval is required before production deployment
 5  FALLBACK completed after 2 attempts
 6  UPDATE   old fact → superseded by → new fact
-✓  HANDOFF  checkpoint created
+✓  HANDOFF  checkpoint <id>
 ```
 
-The ordinary retriever in this scenario can find release notes. That is not the
-whole job: the agent must use the newest fact, read rather than guess an exact
-count, obey the release rule, finish a registered fallback, and leave correct
-state for the next session. The tour makes each outcome inspectable under
-`./.brain-ai/`.
+The memory-management path is `BIND → RECALL/STATE → UPDATE → HANDOFF`: an
+entity-scoped episode is recalled, stale knowledge is superseded, exact state
+is preserved, and the next session gets a durable checkpoint. `GUARD →
+FALLBACK` demonstrates the optional memory-to-action bridge. The tour makes
+both paths inspectable under `./.brain-ai/`.
 
 ## Who should use this?
 
 | Audience | Fit |
 |---|---|
-| Codex or Claude Code power users | **Yes**, when work repeats across sessions or projects and needs durable state, rules, and handoffs |
-| agent, workflow, or research-tool builders | **Yes—the primary audience**, because they can wire context, gates, execution, and lifecycle into the host loop |
-| teams operating auditable local agents | **Yes**, as an inspectable control layer; production hardening is still required |
+| agent, workflow, or research-tool builders | **Yes—the primary audience**, when they need typed memory, entity scope, source trails, lifecycle, and handoff across sessions |
+| teams operating auditable local agents | **Yes**, when memory changes and sources must remain inspectable; production hardening is still required |
+| Codex or Claude Code power users | **Yes**, when they can configure explicit recall, remember, consolidation, and checkpoint calls; this is not a drop-in replacement for built-in memory |
+| RAG, Obsidian, or vector-store users | **Yes**, when retrieval works but scope, staleness, consolidation, or session continuity does not |
 | ordinary ChatGPT/Claude users seeking a better one-off chat | **No direct need**; they may benefit indirectly from an application built with it |
 | one-shot agents or ordinary document search | **Usually no**; use context or RAG first |
 
-Use it when at least one failure keeps recurring: stale facts are reused,
-project identities get mixed, exact values are guessed, written rules are
-ignored, fallback steps stop early, or nobody knows what memory to update or
-archive. It is infrastructure for people who configure agents, not a consumer
-chat application.
+Use it when memory keeps growing without a lifecycle, project identities mix,
+stale facts remain active, exact state is buried in prose, reusable episodes
+never become knowledge, or the next session cannot recover the previous
+decision and its source. It is infrastructure for people who configure agents,
+not a consumer chat application.
 
 Codex/Claude session resume and built-in memory remain useful. Do not replace
 them if they already solve your problem. Brain-AI Memory is for the narrower
-case where operational state must be provider-neutral, typed, inspectable,
-action-aware, and deliberately updated across agents or workflows.
+case where operational memory must be provider-neutral, typed, inspectable,
+source-labeled, lifecycle-managed, and deliberately carried across agents or
+workflows.
 
-![Graphical abstract: a confused agent's mixed history passes through an input gate into a brain-inspired software runtime with separate event, knowledge, rule, exact-state, and executable-sequence roles; a lifecycle loop versions and archives memory before the same agent receives a compact approved context bundle](docs/assets/graphical-abstract.png)
+![Graphical abstract: a host selects a few records from raw session evidence and maps them into separate episode, knowledge, relationship, procedure, and exact-state compartments; the agent receives scoped context, while a separate lower lane checks only a proposed action before an executable sequence can reach a tool](docs/assets/graphical-abstract.png)
 
-## Connect it to an agent
+**Primary path:** host-selected evidence → managed memory → scoped context.
+**Optional bridge:** proposed action → gate → executable sequence.
+
+## What the system manages
+
+| Memory-management responsibility | What the public alpha does |
+|---|---|
+| selected evidence | records only events the host explicitly sends; provider transcripts remain host-owned raw evidence |
+| working-context candidate | reconstructs an entity-scoped, record-count-limited bundle for the host to place within its own token budget |
+| episodic memory | preserves timestamped events and entity bindings in an append-only source |
+| semantic memory | stores sourced reusable knowledge and versions stale facts through supersession |
+| procedural memory | stores explicit rules and promotes episode candidates only after preview and approval |
+| exact state | keeps knowable values in a typed store rather than asking the model to estimate them |
+| lifecycle and handoff | records consolidation, reconsolidation, logical active/inactive decisions, audit, and checkpoint primitives |
+
+Entity relations, source labels, and the validated component ontology cut
+across these stores. The runtime does **not** automatically scrape provider
+sessions, page memory into a model, compact or split files, or physically erase
+source bytes. Its `limit` bounds records, not tokens. Those host-integration and
+retention boundaries are explicit below.
+
+## Manage memory locally
+
+Bind memory to a stable project, release, person, or other entity so similarly
+named events, facts, and values do not leak across scopes:
+
+```bash
+brain-ai entity add --name "Atlas" --type project --alias A
+brain-ai remember --type episodic --entity Atlas \
+  --text "The release moved to Thursday" --promote semantic
+brain-ai remember --type state --entity Atlas --key open_reviews --value 3
+brain-ai run --entity Atlas \
+  "What changed recently and how many reviews remain?"
+brain-ai consolidate          # preview
+brain-ai consolidate --apply  # explicit promotion
+brain-ai checkpoint --summary "release review complete"
+```
+
+The component ontology is validated when the runtime starts. Inspect it with
+`brain-ai ontology`; the canonical schema remains
+[`schema/brain_components.yaml`](schema/brain_components.yaml).
+
+## Optional: connect managed memory to an agent
 
 Install the optional MCP surface:
 
@@ -92,40 +150,31 @@ Add the server to any MCP client using the equivalent of:
 }
 ```
 
-Codex CLI/desktop/IDE and Claude Code support local MCP servers. Before an
-action, the agent calls `brain_context` or `brain_check_action`.
-After work, it records events or exact state and creates a checkpoint. The MCP
-surface intentionally does **not** expose arbitrary shell execution; approved
-actions stay in your host agent or workflow engine.
+Codex CLI/desktop/IDE and Claude Code support local MCP servers. A configured
+host integration calls `brain_context` for scoped recall, `brain_remember` for
+selected events or exact state, and `brain_checkpoint` for a handoff. If
+promotion is wanted, it separately previews and applies `brain-ai consolidate`;
+none of these calls happens in the background.
 
-**Connection is not enforcement.** MCP makes these tools available, but the
-host must treat `gate.allowed = false` as a stop condition. For deterministic
+The public runtime does not scrape or archive a provider's native chat
+transcript, and this repository includes no Claude Code JSONL or Codex rollout
+adapter. Such a trace is raw evidence—not working memory by itself. An
+integrating host or custom adapter decides, under an explicit privacy and
+retention policy, whether to retain the trace and which selected events to map
+into HC. If a raw trace is retained, preserve it as evidence rather than
+rewriting it in place. Backup, access control, encryption, and deletion remain
+host responsibilities.
+
+### Optional memory-to-action enforcement
+
+The same MCP surface also exposes `brain_check_action`, but it intentionally
+does **not** expose arbitrary shell execution. The host remains responsible for
+executing allowed actions. MCP connection alone is not enforcement: the host
+must consume `gate.allowed = false` as a stop condition. For deterministic
 blocking, route execution through `brain-ai harness` or wire the verdict into a
-host pre-action hook. Otherwise the MCP gate remains advisory. See the [Codex
-and Claude Code setup plus integration boundary](docs/07-mcp-server.md).
-
-## Add your own memory
-
-Bind memory to a stable project, release, person, or other entity so similarly
-named facts and counts do not leak across scopes:
-
-```bash
-brain-ai entity add --name "Atlas" --type project --alias A
-brain-ai remember --type episodic --entity Atlas \
-  --text "The release moved to Thursday" --promote semantic
-brain-ai remember --type state --entity Atlas --key open_reviews --value 3
-brain-ai remember --type rule --entity Atlas \
-  --pattern 'deploy\s+production' --text "release approval is required"
-brain-ai run --entity Atlas --action "deploy production" \
-  "What changed recently and how many reviews remain?"
-brain-ai consolidate          # preview
-brain-ai consolidate --apply  # explicit promotion
-brain-ai checkpoint --summary "release review complete"
-```
-
-The component ontology is now validated when the runtime starts. Inspect it
-with `brain-ai ontology`; the canonical schema remains
-[`schema/brain_components.yaml`](schema/brain_components.yaml).
+host pre-action hook. Pass `--entity` when entity-bound rules must apply. See
+the [Codex and Claude Code setup plus integration
+boundary](docs/07-mcp-server.md).
 
 ## Why the brain-inspired separation?
 
@@ -136,23 +185,24 @@ labels are mnemonics, not one-to-one localization or biological simulation.
 If the analogy is not useful in your stack, keep the contracts and discard the
 labels. See the [mapping and its limits](docs/01-the-mapping.md).
 
-> **Evidence boundary.** The public runtime and deterministic ablation verify
-> that the software contracts execute distinct responsibilities. They do not
-> prove that brain inspiration causes better LLM answers or that this system
-> beats RAG end to end. [Evidence and limitations](#evidence-status)
+> **Evidence boundary.** Runtime tests verify selected package behaviors, while
+> the deterministic ablation isolates authored contracts for ten tested
+> lifecycle/control mechanisms. They do not prove that every package surface
+> was ablated, that brain inspiration causes better LLM answers, or that this
+> system beats RAG end to end. [Evidence and limitations](#evidence-status)
 
-## Diagnose the failure you already see
+## Diagnose memory-management failures first
 
 You build coding, research, operations, or assistant agents that work across
 many sessions, and one or more of these sounds familiar:
 
-- “We already wrote that down. Why is the agent asking again?”
-- “The retrieved note is relevant, but it is no longer true.”
-- “The rule exists in the prompt, but the agent still violated it.”
-- “It knew the fallback procedure, tried the first step, and stopped.”
-- “We added more context and a vector store, but failures are still hard to
-  diagnose.”
-- “The memory files keep growing and nobody knows what to compact or delete.”
+- “We recorded that decision. Why can the next session not reconstruct it?”
+- “The retrieved note is relevant, but it has already been superseded.”
+- “This event belongs to another project or entity.”
+- “The same lesson happened repeatedly but never became reusable knowledge.”
+- “The exact value exists, yet the model estimated it from prose.”
+- “The memory index keeps growing and nobody knows what to consolidate,
+  archive, or retain.”
 
 A single-turn chatbot with no durable state probably does not need this
 architecture. Neither does a workflow whose only problem is ordinary document
@@ -162,84 +212,110 @@ whole architecture:
 | What you observe | Diagnose first | Smallest useful change |
 |---|---|---|
 | settled context is lost or bound to the wrong event | episodic memory (HC) | add timestamped event/entity bindings |
+| one project's memory leaks into another | entity scope and relation | bind the record to a stable entity and query within that scope |
 | retrieval is relevant but stale | semantic memory (ATL) | verify freshness and reconsolidate on conflict |
-| the agent knows a rule but ignores it | procedural rule (BG) | promote repeated violations from prose to a guard |
-| a multi-step fallback stops early | procedural execution (CB) | move the sequence into an executable harness |
-| a knowable count is guessed | numerical state (IPS) | query an exact store instead of estimating |
-| work is sent to the wrong store or tool | orchestration (PFC) | trace and correct the routing decision |
-| the always-loaded index keeps expanding | memory lifecycle | keep short pointers; archive or migrate detail |
+| repeated episodes never become reusable knowledge or procedure | consolidation | create an explicit preview/approval promotion path |
+| old and new facts remain simultaneously active | reconsolidation | supersede the stale record while retaining the old row and source link |
+| a knowable value is guessed | exact state (IPS) | query a typed state store instead of estimating from prose |
+| the always-loaded index keeps expanding | memory lifecycle | retain a bounded index and record archive/migration decisions |
+| the next session cannot resume the prior decision | checkpoint and handoff | persist a scoped summary plus pending lifecycle candidates |
 
 These are not features invented for a diagram. They were separated while
 operating a persistent, multi-project agent system and debugging failures in
-its memory, semantic retrieval, guards, and executable workflows. The evidence
-below distinguishes that deployment record from causal and benchmark claims.
+its memory, retrieval, lifecycle, and session handoffs. The evidence below
+distinguishes that deployment record from causal and benchmark claims.
 
-## How this differs from RAG, hooks, harnesses, and loops
+### Optional downstream failures
 
-**It uses all of them. It is not a new name for any one of them.** They are
-implementation mechanisms; Brain-AI Memory is the diagnostic and lifecycle
-layer that assigns each mechanism a job, a failure condition, and a test of
-whether its feedback loop is actually closed.
+After memory is scoped and current, the memory-to-action bridge can address a
+different class of failure:
 
-| Existing method | What it answers | What it does not answer by itself |
+| What you observe | Bridge component | Smallest useful change |
 |---|---|---|
-| long context or a memory file | what can the model read now? | what should move, expire, split, or remain reachable later? |
-| RAG or a vector store | which stored text resembles this query? | is it fresh, which memory type owns it, or should it become a rule? |
-| hook | when can code inspect or intercept an event? | what policy belongs there or whether a multi-step outcome completes? |
-| guard | should this one action be allowed? | how should a fallback sequence run to completion? |
-| harness or workflow engine | how should this procedure execute? | which knowledge should be recalled, updated, or consolidated afterward? |
-| evaluator or retry loop | should another pass run? | what persists across sessions and how recurring failures change the system? |
-| Brain-AI Memory | which subsystem failed, which mechanism fits, and what lifecycle operation follows? | the public alpha supplies a local reference runtime; production scale, model clients, and organization policy remain yours |
+| a recalled rule is ignored during execution | procedural rule consumption (BG) | attach the stored rule to a deterministic action check |
+| a fallback sequence stops after its first failure | procedural execution (CB) | move the sequence into an executable harness |
+| the right memory bundle reaches an unsafe action | routing and proposed-action gate (PFC/TH) | consume the gate verdict at the host execution boundary |
 
-A hook is an attachment point. A guard is an allow/deny decision attached to
-it. A harness owns a sequence. A loop feeds a verdict back into that sequence.
-They are related but not interchangeable—and none is a complete memory
-architecture.
+## Why this is memory management—not just RAG or a harness
 
-### Contribution: differentiated integration, not primitive invention
+Finding relevant text is necessary, but it is only one operation inside a
+memory system. The harder cross-session questions are: *what is this record,
+what does it belong to, is it still current, can it become reusable knowledge
+or a rule, and what must the next session receive?* Brain-AI Memory makes those
+decisions explicit and inspectable.
 
-The honest claim is **differentiated integration, not invention of the
-primitives**. Working, episodic, semantic, and procedural memory categories are
-established ideas; RAG, hooks, workflow harnesses, evaluators, and compaction are
-also established techniques.
+| Existing method | What it supplies | What remains for memory management |
+|---|---|---|
+| long context or a memory file | text the model can read now | type, scope, active version, promotion, retention decision, and handoff |
+| RAG or a vector store | candidate text similar to a query | entity binding, freshness, exact state, consolidation, supersession, and source/version links |
+| entity model, ontology, or relational/graph DB | identity and structured relationships | which records behave as episode, knowledge, rule, or state and how they change across sessions |
+| hook, guard, harness, or retry loop | interception, action policy, sequence execution, or another attempt | ownership and lifecycle of the memory those mechanisms consume and produce |
+| Brain-AI Memory | typed local stores, entity scope, active-view recall, explicit promotion/update decisions, audit, and handoff | the host still supplies raw evidence, model-context assembly, scheduling, physical retention, and production policy |
 
-This repo’s contribution is the operational contract connecting them:
+Entity and relation support is therefore part of the core, but it is a local
+identity-and-scope layer—not a domain ontology reasoner or a replacement for a
+production database. RAG can remain the semantic retrieval backend. A hook can
+call this kernel. A harness can consume its procedural memory. None of those
+mechanisms alone owns the full memory lifecycle.
 
-- every component must name a distinct failure mode and a diagnostic;
-- procedural **rules** (BG) are separated from procedural **execution** (CB),
-  because blocking one action and completing a fallback sequence require
-  different mechanisms;
-- exact numerical state (IPS) and preventive input gating (TH) are modeled
-  explicitly rather than hidden inside generic “memory”;
-- consolidation and reconsolidation specify how episodes become reusable
-  knowledge or how stale knowledge is updated;
-- every memory entry receives one of seven lifecycle operations: keep, compact,
-  archive, migrate to knowledge, migrate to rules, delete, or split; and
-- component existence and **loop closure** are audited separately. A rule file,
-  hook, or vector index existing is not evidence that the relevant result is
-  consumed end to end.
+### The optional control bridge
 
-The brain mapping is an engineering analogy used to keep these failure classes
-separate. If it does not improve diagnosis in your stack, discard the analogy
-and keep the contracts. That makes this architecture different in scope from a
-hook library, retriever, or workflow engine; it does not yet prove that the
-integrated system outperforms simpler alternatives end to end.
+A hook is an attachment point. A guard returns an allow/warn/block decision. A
+harness owns a sequence. A loop feeds an outcome back into another attempt.
+The public package includes small guard and fallback implementations so stored
+rules and host-supplied procedure steps can influence action, but actual
+enforcement and execution are **downstream of memory management** and require
+the host to consume the result. They are not the reason the project is called
+Brain-AI Memory.
+
+### Contribution: differentiated memory contracts, not primitive invention
+
+Working, episodic, semantic, and procedural memory categories are established
+ideas; RAG, entity models, hooks, workflow harnesses, evaluators, and compaction
+are established techniques. The contribution here is an installable contract
+that connects them without collapsing their failure modes:
+
+- PFC reconstructs a scoped working-memory candidate; HC records episodes and
+  relations; ATL stores reusable sourced knowledge; BG stores procedural rules;
+  and IPS preserves exact state;
+- CB keeps executable procedure separate from a rule. The operating
+  architecture can register such harnesses; the public alpha currently accepts
+  host-supplied fallback steps rather than owning a sequence registry;
+- consolidation previews an episode's promotion into knowledge or a rule, and
+  reconsolidation creates a sourced superseding version instead of silently
+  overwriting stale knowledge;
+- a stored entry can receive one explicit lifecycle decision—keep, compact,
+  archive, migrate to knowledge, migrate to rules, delete, or split—while the
+  alpha records that decision and logical active view rather than pretending it
+  physically transformed or erased the host's source;
+- checkpoints carry counts, pending consolidation candidates, and a host-written
+  summary into the next session; and
+- the optional TH/BG/CB action path is tested separately from the core memory
+  path, so software conformance is not mislabeled as memory-quality evidence.
+
+The brain mapping is a functional engineering analogy. Keep it when it improves
+diagnosis; discard the labels when it does not. The current evidence shows real
+operation, tested retrieval tradeoffs, and distinct software contracts. It does
+not yet show that brain inspiration or the integrated system beats simpler
+memory systems end to end.
 
 ## Choose your adoption path
 
-The clean-room public runtime is installable. Start with the integrated local
-loop or adopt only the component that matches your failure:
+The clean-room public kernel is installable. Start with one memory failure and
+add the optional action path only if you need it:
 
 | Your goal | Start here | First success criterion |
 |---|---|---|
-| connect the control layer to an existing agent | [MCP server](docs/07-mcp-server.md) | `brain_context` returns scoped memory and a deterministic gate verdict |
-| run the differentiated lifecycle end to end | [`brain-ai` runtime](docs/05-runtime.md) | install, run, checkpoint, and inspect a routed trace locally |
+| verify the package locally | `brain-ai tour` | inspect entity binding, current fact, exact state, update, and checkpoint under `.brain-ai/` |
+| add typed memory to an agent | `entity`, `remember`, and `run` in the [`brain-ai` runtime](docs/05-runtime.md) | two similarly named projects return only their own active memory |
+| add lifecycle to existing memory files | `consolidate`, `supersede`, `lifecycle`, and `checkpoint` | promotion is previewed, stale knowledge is versioned, and a handoff is recorded |
 | connect Obsidian / Smart Connections | [semantic adapters](docs/06-adapters-and-observer.md) | v1 and v2 responses work; v2 hybrid ranking is preserved without duplicate BM25 |
-| observe the loop without private infrastructure | [clean-room observer](docs/06-adapters-and-observer.md#clean-room-command-center) | component counts and audit events render on localhost |
-| stop one repeated deterministic violation | [behavioral guard](templates/hooks/behavioral-guard.py) | the unsafe pattern is blocked while nearby safe actions pass |
-| surface a judgment check without blocking | [self-check trigger](templates/hooks/self-check-trigger.py) | the warning fires only in the intended context |
+| inspect local state and handoffs | [clean-room observer](docs/06-adapters-and-observer.md#read-only-reference-observer) | store counts, recent audit events, and the latest checkpoint render on localhost |
+| deliver scoped memory to Codex, Claude Code, or another host | [MCP server](docs/07-mcp-server.md) | the host explicitly calls `brain_context`, injects selected records, writes outcomes, and checkpoints |
+| enforce a stored procedure at action time | `brain-ai harness --entity ...` or a [behavioral guard](templates/hooks/behavioral-guard.py) | an entity-scoped unsafe pattern is blocked at the real execution boundary |
+| execute a host-supplied fallback sequence | `brain-ai sequence --entity ...` | attempts continue until success, block, or exhaustion and the trace is audited |
 | stop an index from becoming a second database | [memory skeleton](templates/memory/MEMORY.skeleton.md) | one linked line per topic remains always loaded |
-| decide what to retain or move | [seven-operation helper](templates/memory/7-op-decision.md) | every reviewed entry receives exactly one operation |
+| decide what to retain or move | [seven-operation helper](templates/memory/7-op-decision.md) | every reviewed entry receives exactly one recorded decision; host transforms remain explicit |
 | evaluate the architecture rather than adopt it | [mapping](docs/01-the-mapping.md) and [evidence](evidence/README.md) | you can map a real failure to a component or identify where the map does not fit |
 
 The hooks self-test with the Python standard library:
@@ -249,29 +325,69 @@ python3 templates/hooks/behavioral-guard.py --selftest
 python3 templates/hooks/self-check-trigger.py --selftest
 ```
 
-## How the architecture works
+## How the memory architecture works
 
-The core map contains seven functional components and two transfer channels.
-Read [the detailed mapping](docs/01-the-mapping.md) for the full rationale and
-its limitations.
+The canonical map is a seven-component **cognitive architecture**: five memory
+roles (PFC working/executive, HC episodic, ATL semantic, BG procedural-rule, and
+CB procedural-execution), plus two supporting control/computation roles (TH
+gating and IPS exact numerical state). Consolidation and reconsolidation are
+transfer channels, not extra components. The public product is a memory-
+management kernel because typed memory and its lifecycle are primary; the
+supporting control surfaces do not redefine it as a harness library. Read [the
+detailed mapping](docs/01-the-mapping.md) for the neuroscience rationale and its
+limits.
 
-| Component | Agent role | Failure it helps diagnose |
-|---|---|---|
-| PFC | orchestrator and routing | the right capability is sent to the wrong store or tool |
-| HC | episodic events and relationships | an event is bound to the wrong person, time, or thread |
-| ATL | semantic knowledge | retrieval is relevant but stale or incorrectly sourced |
-| BG | procedural allow/deny rules | the rule exists but does not fire |
-| CB | executable multi-step harnesses | the procedure is abandoned before completion |
-| IPS | exact numerical state | a knowable quantity is guessed |
-| TH | preventive input gate | unsafe input reaches execution |
+| Layer | Component | Public-package responsibility | Failure it helps diagnose |
+|---|---|---|---|
+| memory role | PFC | routes a query to candidate stores and reconstructs a scoped working-memory candidate | the wrong store or entity scope was selected |
+| memory role | HC | episodic events, stable entities, aliases, relations, and bindings | an event is missing or bound to the wrong context |
+| memory role | ATL | active semantic knowledge with sources and superseding versions | retrieval is relevant but stale or incorrectly sourced |
+| memory role | BG | stored procedural rules and approved episode-to-rule promotion | a reusable rule was never captured or selected |
+| memory role | CB | executable procedure representation; the alpha runs explicit host-supplied steps | a procedure remains prose or stops before fallbacks finish |
+| supporting computation | IPS | entity-scoped exact numerical state | a knowable quantity is guessed from prose |
+| supporting control | TH | checks a host-proposed action before execution in the public runtime | an unsafe proposed action reaches the tool boundary |
+| lifecycle channel | consolidation | previews and explicitly applies episode → knowledge/rule promotion | repeated experience never becomes reusable memory |
+| lifecycle channel | reconsolidation | creates a sourced superseding semantic version | stale and current knowledge remain simultaneously active |
+
+The mapping's TH inspiration is broader input gating. The clean-room runtime
+implements the narrower, observable form it actually tests: a proposed-action
+check. It does not claim to filter a model's entire prompt or provider input.
+
+### Host-owned closed loop
+
+The public package provides the kernel operations; it does not run this loop in
+the background. A complete host integration performs these steps explicitly:
+
+1. **Select:** retain any native transcript as host-owned evidence and choose
+   only the records that merit durable operational memory.
+2. **Bind and write:** call `brain_remember`/`brain-ai remember` with the memory
+   type, entity, source label, and exact value where applicable.
+3. **Recall and assemble:** call `brain_context`/`brain-ai run`; the host then
+   fits the returned candidate bundle into its own token budget and model
+   context.
+4. **Act:** execute with the host's own policy, optionally consuming the
+   entity-scoped gate or `harness`/`sequence` bridge.
+5. **Record outcome:** write the selected result as an episode or exact state.
+6. **Review lifecycle:** preview/apply promotion, supersede stale knowledge, and
+   record any archive, split, compact, migration, or logical-delete decision.
+7. **Handoff:** write a checkpoint and have the next session consume it.
+
+Today the package implements the called primitives and audit trail, not an
+automatic transcript adapter, scheduler, token-budget assembler, physical
+archive/delete engine, or checkpoint acknowledgement protocol. A connected MCP
+server alone therefore does not close the loop. Finding a raw trace, selecting
+an episode, assembling candidate memory, and consolidating it are distinct
+operations. See the [memory lifecycle](docs/02-memory-lifecycle.md) for the
+representation and handoff contract.
 
 ![Memory lifecycle: recall, in-session tagging, consolidation, and seven lifecycle operations](docs/assets/memory-lifecycle.svg)
 
 ## Evidence status
 
-Brain-AI Memory has three different evidence layers: longitudinal operation,
-within-system retrieval tests, and reproducible public-data evaluation. They
-answer different questions and should not be collapsed into one headline.
+Brain-AI Memory separates four evidence classes: operational exposure, primary
+memory-management evaluation, supporting software conformance, and evidence
+that is still missing. They answer different questions and should not be
+collapsed into one headline.
 
 | Question | Current evidence |
 |---|---|
@@ -282,31 +398,11 @@ answer different questions and should not be collapsed into one headline.
 | Has stack-aligned retrieval been compared on a public benchmark? | **Yes—LoCoMo retrieval HIT@10: GTE 62.1%, BM25 57.0%, graph-lite 51.9%; n=1,531 answerable questions** |
 | Does a compact pointer index fit more entries than full append-only entries? | **Yes—deterministic capacity simulation** |
 | Does a simple compact pointer preserve retrieval quality on public data? | **No—current keyword pointers trade recall for size** |
-| Does each public runtime component execute a distinct contract? | **Deterministic ablation: full runtime 20/20; flat retrieval control 1/20. The flat control still found the expected top text for 6/6 memory queries; this is conformance, not LLM efficacy** |
 | Does the lifecycle improve answer accuracy for a real LLM agent? | **Not yet measured** |
 | Does the full architecture beat RAG, long context, or another memory system? | **Not yet measured** |
 | Are latency, token cost, conflict resolution, and abstention improved? | **Not yet measured** |
 | How broadly does this single-owner, multi-project deployment generalize? | **Unknown—multi-organization replication is absent** |
-
-### Public runtime component ablation
-
-The installable package was evaluated on 20 deterministic contract cases under
-21 conditions: a flat retrieval control, ten cumulative additions, and ten
-leave-one-out removals. No LLM, external API, private data, or external judge was
-used.
-
-![Cumulative component-contract ablation: the flat control satisfies 1 of 20 contracts and the full public runtime satisfies all 20](docs/assets/component-ablation.png)
-
-The full runtime satisfied 20/20 authored contracts and the flat control
-satisfied 1/20. Importantly, the flat control still retrieved the expected top
-text in all 6/6 memory queries. Its low total reflects the absence of typed
-routing, exact-state, gate, fallback-sequence, and lifecycle contracts—not a
-failure to retrieve text. Every cumulative addition recovered its designated
-cases, and every leave-one-out removal failed the corresponding cases. This is
-evidence that the public components execute distinct software responsibilities;
-it is not evidence that brain inspiration itself improves answer quality or
-that the full architecture beats RAG. See the [report, 420 raw records, summary,
-and manifest](benchmarks/pilots/component-ablation-20260715/README.md).
+| Do the ten ablated memory/lifecycle and optional-control mechanisms execute their authored contracts? | **Supporting conformance only: all-ten condition 20/20; flat retrieval control 1/20. The flat control still found the expected top text for 6/6 memory queries** |
 
 ### Live operational deployment
 
@@ -384,10 +480,34 @@ The preregistered comparison protocol for release-grade external validation is
 in [benchmarks/](benchmarks/README.md). An end-to-end QA result table remains
 absent until the controlled reader-model protocol is run.
 
+### Secondary: memory-to-action contract verification
+
+Separately from the memory-performance scoreboard, the installable package was
+evaluated on 20 deterministic contract cases under 21 conditions: a flat
+retrieval control, ten cumulative additions, and ten leave-one-out removals. No
+LLM, external API, private data, or external judge was used.
+
+![Cumulative mechanism-contract ablation: the flat control satisfies 1 of 20 authored contracts and the condition with all ten tested mechanisms enabled satisfies all 20](docs/assets/component-ablation.png)
+
+The all-ten condition satisfied 20/20 authored contracts and the flat control
+satisfied 1/20. Importantly, the flat control still retrieved the expected top
+text in all 6/6 memory queries. Its lower total reflects missing typed routing,
+exact-state, gate, fallback-sequence, and lifecycle contracts—not failed text
+retrieval. Each cumulative addition recovered its designated cases, and each
+leave-one-out removal failed the corresponding cases.
+
+This verifies that the ten tested software responsibilities are distinguishable
+and executable. It does **not** measure answer quality, autonomous lifecycle
+management, or superiority over RAG. See the [report, 420 raw records, summary,
+and manifest](benchmarks/pilots/component-ablation-20260715/README.md).
+
 ## Next external validation
 
-The next release-grade QA comparison will hold the reader model, prompt, context
-budget, dataset split, and scoring procedure constant across:
+The primary missing evidence is a controlled, end-to-end memory-management QA
+comparison: can an agent retain, retrieve, update, scope, abstain, and resume
+more reliably under the same reader and budget? The next release-grade run will
+hold the reader model, prompt, context budget, dataset split, and scoring
+procedure constant across:
 
 1. no external memory;
 2. append-only or full-history memory;
@@ -407,6 +527,27 @@ heavier workflow- and environment-memory evaluation.
 No top-line performance claim will be added without complete per-item outputs,
 cost and latency reporting, controlled baselines, and a reproducible run
 manifest.
+
+## Capability roadmap
+
+The public alpha is a working kernel, not yet an autonomous closed-loop memory
+service. The implementation path is:
+
+1. add a provider-neutral ingestion envelope with session/message identity,
+   event time, outcome, evidence URI/hash, and deduplication;
+2. ship one opt-in transcript adapter without making private provider logs part
+   of the core;
+3. assemble candidate memory under a real token/byte budget and expose why each
+   record was selected;
+4. add checkpoint consume/acknowledge/resume plus lifecycle backlog and health
+   metrics; and
+5. provide explicit compact, split, archive, and verified-delete adapters, then
+   test the complete host loop end to end.
+
+Production multi-writer locking, authentication, domain-ontology reasoning,
+and entity merge/versioning remain later hardening work. Until these are
+implemented and tested, the accurate product boundary is an **installable
+memory-management reference kernel**, not a fully autonomous memory platform.
 
 ## Relationship to prior work
 
@@ -433,20 +574,20 @@ those systems.
 | Path | What it contains |
 |---|---|
 | [docs/01-the-mapping.md](docs/01-the-mapping.md) | seven components and two channels |
-| [docs/02-memory-lifecycle.md](docs/02-memory-lifecycle.md) | seven operations, session transfer, and health metrics |
+| [docs/02-memory-lifecycle.md](docs/02-memory-lifecycle.md) | four representations, seven operations, host handoffs, and health metrics |
 | [docs/03-governance-tiers.md](docs/03-governance-tiers.md) | advisory, guarded, and enforced tiers |
 | [docs/04-principles.md](docs/04-principles.md) | short judgment-bound operating principles |
-| [docs/05-runtime.md](docs/05-runtime.md) | installable CLI, stores, routing, harnesses, and lifecycle |
+| [docs/05-runtime.md](docs/05-runtime.md) | installable memory kernel, stores, routing, lifecycle, and optional action bridge |
 | [docs/06-adapters-and-observer.md](docs/06-adapters-and-observer.md) | Smart Connections compatibility and clean-room Command Center |
 | [docs/07-mcp-server.md](docs/07-mcp-server.md) | provider-neutral MCP tools, resources, setup, and security boundary |
 | [src/brain_ai_memory/](src/brain_ai_memory/) | public Python runtime implementation |
-| [tests/](tests/) | end-to-end runtime and adapter tests |
+| [tests/](tests/) | kernel integration, adapter, and supporting contract tests |
 | [CHANGELOG.md](CHANGELOG.md) | release-level changes and evidence boundaries |
 | [schema/brain_components.yaml](schema/brain_components.yaml) | machine-readable component ontology |
 | [templates/](templates/) | copy-paste memory, rule, and hook skeletons |
 | [examples/](examples/) | tiny runnable cases using synthetic data |
 | [evidence/](evidence/) | operational snapshot, internal A/B summary, and capacity simulation |
-| [benchmarks/](benchmarks/) | contract A/B, external-data retrieval pilot, and release gates |
+| [benchmarks/](benchmarks/) | memory-evaluation protocol and pilots, plus supporting contract verification |
 
 ## Contributing
 

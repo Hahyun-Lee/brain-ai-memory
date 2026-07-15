@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
-  <title id="title">Brain-inspired software responsibility map for LLM agents</title>
-  <desc id="desc">A software input gate routes through an explicit orchestrator to episodic, semantic, rule, execution, and exact-state contracts. Consolidation and reconsolidation are versioned lifecycle operations. Brain labels are functional mnemonics, not anatomical claims.</desc>
+  <title id="title">Brain-inspired memory-management responsibility map for LLM agents</title>
+  <desc id="desc">A host submits a memory query to an explicit orchestrator that routes across episodic, semantic, procedural, execution, and exact-state contracts. Consolidation and reconsolidation manage stored memory; an optional proposed-action gate sits before the tool boundary. Brain labels are functional mnemonics, not anatomical claims.</desc>
   <defs>
     <marker id="arrow-navy" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
       <path d="M0,0 L12,6 L0,12 z" fill="#334155"/>
@@ -31,18 +31,18 @@
   <rect width="1200" height="760" rx="24" fill="#F8FAFC"/>
 
   <text x="54" y="45" class="eyebrow" fill="#2563EB">SOFTWARE RESPONSIBILITY MAP</text>
-  <text x="54" y="82" class="title">A memory system you can diagnose component by component</text>
-  <text x="54" y="111" class="subtitle">Seven engineering roles, two lifecycle channels, and a distinct failure contract for each part.</text>
+  <text x="54" y="82" class="title">Typed memory core with an optional action bridge</text>
+  <text x="54" y="111" class="subtitle">Seven engineering roles, two lifecycle channels, and an explicit host boundary.</text>
 
-  <text x="54" y="159" class="eyebrow" fill="#64748B">INPUT</text>
+  <text x="54" y="159" class="eyebrow" fill="#64748B">HOST INPUT</text>
   <rect x="54" y="176" width="224" height="126" rx="18" fill="#E0F2FE" stroke="#7DD3FC" stroke-width="1.5"/>
-  <text x="76" y="207" class="code" fill="#0369A1">TH</text>
-  <text x="76" y="237" class="node-title">Input gate</text>
-  <text x="76" y="261" class="node-copy">Filters unsafe input</text>
-  <text x="76" y="282" class="failure">Failure: unfiltered input</text>
+  <text x="76" y="207" class="code" fill="#0369A1">QUERY</text>
+  <text x="76" y="237" class="node-title">Memory request</text>
+  <text x="76" y="261" class="node-copy">Goal + entity scope</text>
+  <text x="76" y="282" class="failure">Host selects the evidence</text>
 
   <line x1="278" y1="239" x2="378" y2="239" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
-  <text x="302" y="225" class="edge-label" fill="#64748B">admits</text>
+  <text x="302" y="225" class="edge-label" fill="#64748B">submits</text>
 
   <rect x="386" y="157" width="430" height="164" rx="20" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
   <text x="414" y="192" class="code" fill="#1D4ED8">PFC</text>
@@ -51,15 +51,20 @@
   <text x="414" y="281" class="failure-label">DIAGNOSTIC</text>
   <text x="508" y="281" class="failure">Did the agent read the right store?</text>
 
-  <text x="1000" y="159" class="eyebrow" fill="#64748B">OUTPUT</text>
-  <line x1="816" y1="239" x2="992" y2="239" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
-  <text x="838" y="225" class="edge-label" fill="#64748B">coordinates action</text>
-  <rect x="1000" y="176" width="148" height="126" rx="18" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="1.5"/>
-  <text x="1022" y="233" class="node-title">Action</text>
-  <text x="1022" y="259" class="node-copy">Tools and the</text>
-  <text x="1022" y="279" class="node-copy">outside world</text>
+  <text x="878" y="159" class="eyebrow" fill="#64748B">OPTIONAL ACTION BRIDGE</text>
+  <line x1="816" y1="239" x2="870" y2="239" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
+  <text x="820" y="225" class="edge-label" fill="#64748B">proposes</text>
+  <rect x="878" y="176" width="190" height="126" rx="18" fill="#E0F2FE" stroke="#7DD3FC" stroke-width="1.5"/>
+  <text x="900" y="207" class="code" fill="#0369A1">TH</text>
+  <text x="900" y="237" class="node-title">Action gate</text>
+  <text x="900" y="261" class="node-copy">Checks host proposal</text>
+  <text x="900" y="282" class="failure">Failure: unchecked action</text>
+  <line x1="1068" y1="239" x2="1090" y2="239" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
+  <rect x="1098" y="191" width="50" height="96" rx="14" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="1.5"/>
+  <text x="1123" y="232" text-anchor="middle" class="node-copy">Host</text>
+  <text x="1123" y="253" text-anchor="middle" class="node-copy">tool</text>
 
-  <text x="54" y="369" class="eyebrow" fill="#64748B">SPECIALIZED SYSTEMS</text>
+  <text x="54" y="369" class="eyebrow" fill="#64748B">MEMORY + SUPPORTING ROLES</text>
   <line x1="599" y1="321" x2="599" y2="378" stroke="#334155" stroke-width="2"/>
   <line x1="151" y1="378" x2="1047" y2="378" stroke="#334155" stroke-width="2"/>
   <line x1="151" y1="378" x2="151" y2="412" stroke="#334155" stroke-width="2" marker-end="url(#arrow-navy)"/>
@@ -106,7 +111,7 @@
   <path d="M157 568 L157 600 Q157 612 169 612 L357 612 Q369 612 369 600 L369 574" fill="none" stroke="#0F766E" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#arrow-teal)"/>
   <text x="263" y="632" text-anchor="middle" class="edge-label" fill="#0F766E">consolidation</text>
   <path d="M381 568 L381 642 Q381 654 369 654 L157 654 Q145 654 145 642 L145 574" fill="none" stroke="#2563EB" stroke-width="2" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow-blue)"/>
-  <text x="263" y="678" text-anchor="middle" class="edge-label" fill="#2563EB">reconsolidation at recall</text>
+  <text x="263" y="678" text-anchor="middle" class="edge-label" fill="#2563EB">reconsolidation (explicit update)</text>
 
   <line x1="518" y1="621" x2="890" y2="621" stroke="#CBD5E1" stroke-width="1.5"/>
   <circle cx="533" cy="621" r="5" fill="#B45309"/>

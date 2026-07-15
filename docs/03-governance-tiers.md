@@ -6,8 +6,12 @@
 > that makes it worse. The answer is a three-tier escalation, and one insight about what these
 > systems actually do.
 
-Builds on [`01-the-mapping.md`](01-the-mapping.md): the procedural-rule component (BG) and the input
-gate (TH) are where governance lives. This document is how you decide what belongs there.
+Builds on [`01-the-mapping.md`](01-the-mapping.md): the procedural-rule component
+(BG) and the pre-execution gate (TH) are where governance lives. This document
+is how you decide what belongs there. The broader architecture can wire input
+and write/security gates at the host boundary; the public alpha implements only
+the narrower contract it can demonstrate—a check over an explicit proposed-
+action string.
 
 ## The three tiers
 
@@ -41,8 +45,8 @@ promotion decision.
 
 A deterministic gate fires before the action and refuses it outright. This is reserved for two
 cases: patterns that have been violated often enough that advice and warnings demonstrably did not
-work, and a small set of preventive safety gates (the input-gating component from
-[`01`](01-the-mapping.md), blocking dangerous input before it executes). Enforced rules are
+work, and a small set of preventive safety gates (the gating component from
+[`01`](01-the-mapping.md), blocking a dangerous proposed action before it executes). Enforced rules are
 allow/deny valves with no judgment in them, which is exactly why they can be fully automated. Use
 this tier sparingly; everything here is something the agent can no longer do, including the
 occasional case where it should.
@@ -57,7 +61,7 @@ Rules earn their tier through evidence, not through how important they feel:
   miss visible at the moment it happens.
 - A pattern violated **repeatedly despite a Tier 2 warning** is a candidate for **Tier 1**, where it
   is blocked. Repetition under warning is the proof that the softer tiers are insufficient.
-- The exception is **preventive safety**. A dangerous-input vector identified by threat analysis can
+- The exception is **preventive safety**. A dangerous-action pattern identified by threat analysis can
   go straight to Tier 1 with no violation history, because the whole point of a safety gate is to
   block the first occurrence, not the third.
 

@@ -1,9 +1,13 @@
-# Semantic adapter와 공개 observer
+# Semantic adapter, event 경계, read-only observer
 
 이 문서는 Brain-AI가 ATL 검색을 위해 Smart Connections의 **MCP client**로
 동작하는 경우를 설명합니다. Brain-AI 자체를 agent에 MCP server로 제공하려면
 [한국어 MCP server guide](07-mcp-server.ko.md)를 참고하세요. 두 방향은 서로
 독립적이며 함께 사용할 수 있습니다.
+
+Semantic adapter는 memory-management kernel의 ATL retrieval만 확장합니다.
+Provider session을 ingest하거나 model working context를 조립·주입하거나 lifecycle
+decision을 적용하거나 optional proposed-action control bridge를 enforce하지 않습니다.
 
 ## Smart Connections는 전체 시스템이 아니라 ATL adapter입니다
 
@@ -42,8 +46,10 @@ child process가 정리됩니다.
 
 v2 hybrid fork에서는 `mcp_env`에 `SMART_SEARCH_PROFILE=adaptive`를 지정하는 것을
 권장합니다. Adapter는 Markdown 전체를 agent context에 넣지 않고 v2의 제한된
-snippet을 사용합니다. `SMART_VAULT_PATH`는 항상 `vault_path`에서 설정되므로
-`mcp_env`로 덮어쓸 수 없습니다.
+snippet을 retrieval result로 사용합니다. 이는 result별 snippet bound이지 global
+token-safe working-context budget이 아니며 adapter가 model에 result를 주입하지도
+않습니다. `SMART_VAULT_PATH`는 항상 `vault_path`에서 설정되므로 `mcp_env`로
+덮어쓸 수 없습니다.
 
 검증한 hybrid server는
 [Hahyun-Lee/smart-connections-mcp](https://github.com/Hahyun-Lee/smart-connections-mcp)입니다.
@@ -55,16 +61,38 @@ entity-scoped recall에서 project를 조용히 섞지 않도록 이 unverified 
 제외합니다. 이를 확인하려면 unscoped recall을 실행하거나 선택한 knowledge를
 local store로 import하고 entity에 연결하세요.
 
-## Clean-room Command Center
+## Event와 ingestion 경계
+
+공개 episodic contract는 `brain-ai remember --type episodic`, `brain_remember`, 또는
+Python store API를 통해 명시적으로 선택해 기록한 event입니다. Stored record에는
+ID, text, source label, tag, optional promotion metadata와 entity binding, ingest
+timestamp가 포함됩니다. 이는 provider transcript envelope가 아니며, host가 별도로
+보존하지 않으면 structured session/message ID, occurred-at time, outcome, raw-evidence
+hash를 포함하지 않습니다.
+
+어떤 semantic adapter도 Claude Code JSONL, Codex rollout, chat log 또는 provider
+transcript를 감시하지 않습니다. Host가 자체 privacy, retention, idempotency,
+evidence policy에 따라 event를 선택하고 명시적으로 mapping해야 합니다. External
+vault의 retrieval hit도 candidate knowledge일 뿐 local event나 semantic store에
+자동 기록되지 않습니다.
+
+## Read-only reference observer
 
 ```bash
 brain-ai serve
 ```
 
-`http://127.0.0.1:8765`에서 component count, 최근 control-loop trace,
+`http://127.0.0.1:8765`에서 component count, 최근 audit event,
 checkpoint를 확인할 수 있습니다. Read-only JSON endpoint는 `/api/health`,
 `/api/status`, `/api/events`입니다.
 
-공개 runtime event contract만 읽습니다. 비공개 Command Center의 data, path,
-endpoint, credential, project-specific logic을 복사하지 않았습니다. 인증이 없는
-localhost inspection 용도이며 network에 직접 노출하면 안 됩니다.
+`/api/health`는 process liveness와 version string을 반환합니다. `/api/status`는
+config summary, count, latest checkpoint를, `/api/events`는 최근 audit record를
+반환합니다. Store integrity, lifecycle backlog, ingestion lag, provenance
+completeness, context budget, trend, alert를 계산하지 않으므로 memory health
+engine으로 설명하면 안 됩니다.
+
+Observer는 public runtime state만 읽습니다. 비공개 Command Center의 data, path,
+endpoint, credential, project-specific logic을 복사하지 않았고 새 event를 ingest하거나
+control loop를 닫지도 않습니다. 인증이 없는 localhost inspection 용도이며 network에
+직접 노출하면 안 됩니다.

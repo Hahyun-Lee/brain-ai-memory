@@ -2,12 +2,23 @@
   "schema_version": 1,
   "run_id": "component-ablation-20260715",
   "status": "complete",
-  "benchmark": "Brain-AI public runtime component-contract ablation",
-  "claim_scope": "deterministic component-contract conformance only; not external LLM QA or agent-quality efficacy",
+  "benchmark": "Brain-AI ten-mechanism lifecycle/control contract ablation",
+  "claim_scope": "authored deterministic contracts for ten ablated mechanisms only; not the full package, external LLM QA, or agent-quality efficacy",
   "release_grade_external_benchmark": false,
   "generated_at": "2026-07-15T01:36:57+00:00",
   "repository_commit": "d0d675ead16b96b6f4ac0a5aaab7ddcf20786ba7",
   "repository_dirty": false,
+  "post_run_metadata_revision": {
+    "date": "2026-07-15",
+    "records_modified": false,
+    "scored_results_modified": false,
+    "changes": [
+      "narrowed claim wording from the full public runtime to ten tested lifecycle/control mechanisms",
+      "corrected the PFC label from goal-aware to query/action-cue routing",
+      "added recorded-source provenance hashes",
+      "added normalized semantic-outcome parity metadata"
+    ]
+  },
   "execution": {
     "python": "3.12.2",
     "external_llm_or_api": false,
@@ -312,9 +323,30 @@
     "cases": "537449fa75f4303e86e131f2cb1305bd67240125fab44198c6e47297816e5f83",
     "runner": "140a719c5acb7c98e8ddaa642d70af4ed00afab7242d2accd54d1e95ab65f99f"
   },
+  "implementation_sha256": {
+    "benchmarks/run_component_ablation.py": "140a719c5acb7c98e8ddaa642d70af4ed00afab7242d2accd54d1e95ab65f99f",
+    "benchmarks/component_ablation_cases.jsonl": "537449fa75f4303e86e131f2cb1305bd67240125fab44198c6e47297816e5f83",
+    "src/brain_ai_memory/__init__.py": "003df2a328649a839bd84cc9062a44d91e0ea7ec75c9fa3554bc00399289afb5",
+    "src/brain_ai_memory/runtime.py": "212cbc180168b75c36e071f2aff2588dc3938aee4cc4e92f4e93f08bfa520777",
+    "src/brain_ai_memory/storage.py": "bd2b7e30c51cb9494036378854ab2206884718a7f83fd001942f2b8d19765b42",
+    "src/brain_ai_memory/text.py": "161be47148ff7094b2f0b7947680a15fca497f2072e035b7b64dbe8c8f48a51b",
+    "src/brain_ai_memory/config.py": "722b2283e16ef9aa70b01a97589b09075b986b11f5d1462c8a5348ca91ae2e75",
+    "src/brain_ai_memory/adapters.py": "c7159e499796b5a9b455c47cf0d60892859d0c905d6c3608ba21a4bbc8a1a59e"
+  },
+  "semantic_outcome": {
+    "normalization": "component-ablation-outcome-v1",
+    "excluded_fields": [
+      "latency_ms",
+      "observed.counts_before.entities",
+      "observed.counts_before.relations",
+      "observed.counts_after.entities",
+      "observed.counts_after.relations"
+    ],
+    "sha256": "6db06a31cd06aaaab5ffa46e0dfabe14acd9f8b0df85662aeff23442e9c72cc4"
+  },
   "artifact_sha256": {
     "records.jsonl": "28f85ebe7f8419ef16b36c388628b56b2efa13ffca4835ad66d519ba187bec2e",
-    "summary.json": "8eeffd5a7a1b2a2281991253813f06c499be1e164c64a30805eb8828d547eea4",
-    "README.md": "16c9b92ffaebe37b99712d7ba839e220fc4b934d167a3b8a2480f4cb9ccc3285"
+    "summary.json": "fc24736a76f26d9bc668ccef9dd4b0c61eb7f98ed725f90785203b682a776311",
+    "README.md": "6830c70328bb3f8c60462760b0882e89e2fa0d2453a5fa5deb4e75121fc5f0b8"
   }
 }

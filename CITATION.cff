@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use Brain-AI Memory in research or an agent system, please cite this repository."
-title: "Brain-AI Memory: An Installable Diagnostic and Control Runtime for Long-Running LLM Agents"
+title: "Brain-AI Memory: An Installable Reference Kernel for Typed Agent Memory Management"
 type: software
 authors:
   - family-names: Lee

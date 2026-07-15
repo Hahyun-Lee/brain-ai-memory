@@ -6,30 +6,70 @@ and spans multiple projects, stores, hooks, and workflows under one owner. That
 is strong evidence of implementation and operational exposure, but it is not
 independent multi-user validation or proof of superiority.
 
-The evidence is separated by what it can support:
+The evidence is separated by what it can support. Operational exposure,
+memory-management performance, and software conformance are not interchangeable.
 
-1. [Operational evidence](operational-evidence.md): live deployment scale,
-   health probes, lifecycle episodes, and internal A/B retrieval results.
-2. [Sanitized aggregate snapshot](operational-snapshot-2026-07-14.json): the
-   machine-readable numbers behind that report.
-3. The capacity simulation below: a reproducible mechanism test using synthetic
-   data.
-4. [Public component-contract ablation](../benchmarks/pilots/component-ablation-20260715/README.md):
-   20 deterministic cases under 21 cumulative and leave-one-out conditions,
-   with 420 raw records. It tests software conformance, not LLM efficacy.
-5. [Public benchmark artifacts](../benchmarks/README.md): reproducible public
-   data pilots and the release gate for external QA claims.
+## Evidence ladder
+
+### 1. Operational reality—not efficacy
+
+- [Operational evidence](operational-evidence.md) reports live deployment
+  scale, health probes, lifecycle episodes, and internal A/B retrieval results.
+- The [sanitized aggregate snapshot](operational-snapshot-2026-07-14.json)
+  contains the machine-readable numbers behind that report.
+
+This establishes that the architecture was implemented, exercised, monitored,
+and repaired longitudinally. It does not establish that the architecture
+caused better agent outcomes.
+
+### 2. Primary memory-management evidence
+
+- The operating stack has indicative same-system pointer and semantic-store
+  retrieval A/B results. The operational report also includes an aggregate
+  public-data LoCoMo comparison over all 1,531 answerable questions in its 10
+  samples; its private per-item evaluation bundle is not published here.
+- The [LongMemEval-S retrieval pilot](../benchmarks/pilots/longmemeval-s-retrieval-20260714/README.md)
+  is the fully reproducible public-data result: 500 cleaned questions with raw
+  per-item artifacts. Its important result is negative—the 96-keyword pointer
+  used 93.0% less indexed text than full-session BM25, but answer-session
+  recall@3 fell from 86.1% to 71.0%.
+- The capacity simulation below is a synthetic mechanism check. It shows how a
+  compact index delays overflow under its disclosed fixed budget; it is not a
+  semantic-retrieval or LLM benchmark.
+
+These results cover operational exposure, retrieval behavior, and one capacity
+mechanism. They do not yet evaluate the complete memory lifecycle end to end.
+The [benchmark protocol](../benchmarks/README.md) defines the controlled public
+comparison still required.
+
+### 3. Supporting memory-to-action contract verification
+
+The [ten-mechanism lifecycle/control ablation](../benchmarks/pilots/component-ablation-20260715/README.md)
+contains 20 deterministic cases under 21 cumulative and leave-one-out
+conditions, with 420 raw records. It verifies authored typed-routing,
+exact-state, gating, fallback, consolidation, reconsolidation, and checkpoint
+contracts. It is software conformance evidence, not representative
+memory-management performance or LLM efficacy.
+
+### What is still missing
+
+No completed public end-to-end comparison yet shows that the full lifecycle
+improves reader-model answer accuracy, knowledge-update or conflict-resolution
+accuracy, abstention, cost, or latency against matched memory baselines. The
+supporting conformance result cannot fill that evidence gap.
 
 ## What is claimed, and what is not
 
-**Claimed.** The failure mode the memory lifecycle (docs/02) is built to prevent
-is real and mechanical: under a fixed recall budget, append-only memory growth
-silently evicts old-but-needed facts, and a one-line-index-plus-on-demand-detail
-discipline raises the point at which that happens.
+**Claimed.** The architecture has sustained operational exposure; tested
+retrieval components have disclosed positive and negative results; and, under
+the capacity simulation's fixed budget, a one-line-index-plus-on-demand-detail
+discipline raises the point at which overflow begins.
 
-**Not claimed.** That the discipline makes a real LLM agent smarter, that it
-dominates every workload, or that a single-owner longitudinal deployment is a
-controlled comparison. The simulation below models index capacity, not an LLM.
+**Not claimed.** That the complete lifecycle makes a real LLM agent smarter,
+that the lifecycle/control conformance score is a memory-performance score,
+that Brain-AI dominates every workload, or that a single-owner longitudinal
+deployment is a controlled comparison. The simulation below models index
+capacity, not an LLM.
 
 ## The capacity simulation
 

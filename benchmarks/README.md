@@ -1,13 +1,45 @@
 # Benchmark protocol
 
-**Status: one reproducible full-dataset retrieval pilot and one deterministic
-public-runtime component ablation completed; internal operational A/B results
-exist; no release-grade public QA run completed.**
+**Memory-management scoreboard:** one reproducible full-dataset retrieval pilot
+is complete; no release-grade public end-to-end lifecycle/QA run is complete.
+Internal operational A/B results exist. Separately, deterministic
+lifecycle/control conformance checks are complete.
 
 This directory defines what must be true before Brain-AI Memory can make a
-public comparative performance claim. The live deployment and internal A/B
-results are summarized in [evidence/](../evidence/), but their raw source data
-remain private. The capacity simulation is not part of the benchmark scoreboard.
+public comparative performance claim. It keeps two tracks separate:
+
+1. **Memory-management evaluation is the primary performance track.** It asks
+   whether a system retains, retrieves, scopes, updates, and consolidates
+   memory more accurately or efficiently under matched conditions.
+2. **Lifecycle/control conformance is supporting software verification.** It
+   asks whether selected memory-to-action paths execute their authored routing,
+   state, gate, fallback, and handoff contracts. It is not a memory-quality or
+   agent-efficacy score.
+
+The live deployment and internal A/B results are summarized in
+[evidence/](../evidence/), but their raw source data remain private. The
+capacity simulation and authored contract suites are not part of the
+comparative memory-performance scoreboard.
+
+## Current memory-management evidence ladder
+
+1. **Operational reality.** The architecture has longitudinal deployment,
+   monitored stores, and recorded lifecycle interventions. This establishes
+   implementation and exposure, not causal benefit.
+2. **Retrieval evidence.** Internal pointer and semantic-store A/B results are
+   indicative within-system signals. A stack-aligned LoCoMo evaluation covers
+   all 1,531 answerable questions in its 10 samples, but its clean-room public
+   release contains aggregate results rather than the private per-item bundle.
+3. **Reproducible public-data retrieval.** The 500-question LongMemEval-S pilot
+   below publishes raw per-item artifacts. Its central result is negative:
+   compact keyword pointers reduce indexed text but lose recall relative to
+   full-session BM25.
+4. **Capacity mechanism check.** The synthetic fixed-budget simulation shows
+   when a compact index can delay overflow. It is a conditional mechanism
+   demonstration, not an LLM benchmark.
+5. **End-to-end lifecycle/QA.** Still missing. No completed public comparison
+   yet shows that the full lifecycle improves answer accuracy, conflict
+   resolution, abstention, cost, or latency for a real reader model.
 
 ## Completed retrieval pilot
 
@@ -30,19 +62,23 @@ an installable reference runtime with independently callable consolidation and
 reconsolidation. A release-grade public comparison must use that implementation
 to:
 
-1. ingests the same timestamped history stream for every condition;
-2. creates memory without seeing the future evaluation question;
-3. retrieves evidence under a fixed context budget;
-4. exposes consolidation and reconsolidation as independently removable
+1. ingest the same timestamped history stream for every condition;
+2. create memory without seeing the future evaluation question;
+3. retrieve evidence under a fixed context budget;
+4. expose consolidation and reconsolidation as independently removable
    modules; and
-5. records every retrieved item, model call, token count, and latency.
+5. record every retrieved item, model call, token count, and latency.
 
 The seven-component architecture is broader than conversational retrieval.
 Long-term QA can test episodic/semantic memory and the two transfer channels.
-Rule gating, fallback completion, exact numerical state, and input filtering
+Rule gating, fallback completion, exact numerical state, and proposed-action gating
 need separate task suites and must not be declared validated by a QA score.
 
-## Public runtime contract checks and ablation
+## Supporting memory-to-action contract verification
+
+The following suites sit outside the memory-performance scoreboard. They test
+whether authored software paths execute and remain separable; they do not
+measure whether Brain-AI manages memory better than another system.
 
 [`run_runtime_contract.py`](run_runtime_contract.py) compares the installable
 runtime with a flat retrieval-only control on 14 deterministic cases covering
@@ -50,27 +86,35 @@ semantic and episodic recall, exact numerical state, action gating, and
 component routing. The 2026-07-15 reference run scored 14/14 for the runtime and
 8/14 for the control. See the [report](pilots/runtime-contract-20260715/README.md).
 
-This benchmark answers only: “does the public package execute its stated
+This conformance suite answers only: “does the public package execute its stated
 component contracts?” The cases are designed around those contracts, so the
 score is not evidence that the system improves LLM QA, general agent quality,
 or performance on an external workload. The flat control is also much faster;
 quality and overhead must both be measured in later external evaluation.
 
-The broader [component-contract
+The broader [lifecycle/control mechanism
 ablation](pilots/component-ablation-20260715/README.md) evaluates 20 authored
-cases under 21 conditions: a flat retrieval control, ten cumulative component
-additions, and ten leave-one-out removals. The full runtime scored 20/20 and the
-flat control scored 1/20, while the flat control still retrieved the expected
-top text for all 6/6 memory queries. The difference therefore measures typed
-routing, exact-state, gating, fallback, and lifecycle contract coverage—not a
-general retrieval or answer-quality advantage. The run publishes 420 raw
-records, a summary, and a manifest with artifact hashes.
+cases under 21 conditions: a flat retrieval control, ten cumulative mechanism
+additions, and ten leave-one-out removals. The condition with all ten tested
+mechanisms enabled scored 20/20 and the flat control scored 1/20, while the
+flat control still retrieved the expected top text for all 6/6 memory queries.
+The difference therefore measures the authored typed-routing, exact-state,
+gating, fallback, and lifecycle contracts—not the full runtime, general
+retrieval, or answer-quality advantage. Entity/relation management, ontology,
+MCP/CLI, semantic adapters, and host integration are not ablated here. The run
+publishes 420 raw records, a summary, artifact/source provenance hashes, and a
+normalized semantic-outcome digest for current-release parity checks.
 
 Reproduce the cumulative chart with:
 
 ```bash
+python3 -m pip install ".[plot]"
 python3 benchmarks/plot_component_ablation.py
 ```
+
+The plotting extra pins Matplotlib 3.10.8. Exact PNG bytes can still vary by
+platform font and rendering backend; the summary data and visible labels are
+the reproducible contract, not a cross-platform pixel hash.
 
 ## Preregistered hypotheses
 
@@ -186,9 +230,10 @@ rows, never as a direct comparison.
 
 The full system must be decomposed so the source of a gain is visible:
 
-The deterministic public-runtime ablation above now verifies component-contract
-separation. The following ablations still refer to the pending external LLM QA
-evaluation and cannot be replaced by that conformance result:
+The deterministic ten-mechanism ablation above now verifies separation among
+its authored lifecycle/control contracts. The following ablations still refer
+to the pending external LLM QA evaluation and cannot be replaced by that
+conformance result:
 
 1. pointer index without lifecycle migration;
 2. episodic/semantic separation;
@@ -200,9 +245,9 @@ evaluation and cannot be replaced by that conformance result:
 An ablation that does not change behavior should not remain in the claimed
 architecture on the strength of analogy alone.
 
-## Artifacts for every run
+## Artifacts for comparative memory runs
 
-Each run directory must contain:
+Each run intended to support the primary memory-performance track must contain:
 
 - manifest.json — immutable configuration and aggregate metrics;
 - predictions.jsonl — one record per benchmark item;
@@ -224,6 +269,10 @@ The release check rejects incomplete or partial splits, non-official scoring,
 oracle evidence, a dirty repository, artifacts outside the run directory,
 missing or changed artifacts, placeholder hashes, and absent
 quality/efficiency metrics.
+
+Supporting conformance suites may use a narrower deterministic manifest, but
+that manifest cannot pass in place of this release gate or support a top-line
+memory-performance claim.
 
 ## Claim release gate
 
