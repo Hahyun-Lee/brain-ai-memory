@@ -2,32 +2,37 @@
 
 # Brain-AI Memory
 
-> Not another memory database: a diagnostic and control architecture for
-> long-running LLM agents.
+> **A local-first memory and control runtime for agents that must remember the
+> right context, enforce rules, preserve exact state, and finish procedures
+> across sessions.**
 
-**Your agent probably does not have one “memory problem.”** RAG can retrieve
-candidate context. A guard attached to a hook can block an action. A harness can
-finish a workflow. A loop can retry. None of them alone tells you why an agent
-re-asks a settled question, uses stale knowledge, ignores a rule, stops after
-one failed attempt, or lets its persistent context grow without a lifecycle.
+**Available now:** installable public alpha (`v0.2`). The local demo needs no API
+key, model call, database server, or external service.
 
-Brain-AI Memory gives those failures different names, mechanisms, and repair
-paths. It helps you decide what the agent should remember, retrieve, enforce,
-execute, update, archive, and forget.
+Human memory and control rely on partly distinct but interacting functions.
+Brain-AI Memory borrows that **functional separation—not literal brain anatomy**
+and translates it into inspectable software contracts: stores, routing,
+deterministic guards, executable fallback sequences, and lifecycle operations.
 
-**Project status:** installable public alpha (`v0.2`). This clean-room extraction
-from a live daily-driver system now ships the architecture **and** a local-first
-reference runtime: differentiated stores, routing, guards, executable fallback
-sequences, checkpoints, consolidation, reconsolidation, semantic adapters, and a
-read-only observer. Private operational data and organization-specific wiring
-remain excluded. Validation status is reported below.
+![Graphical abstract: a confused agent's mixed history passes through an input gate into a brain-inspired software runtime with separate event, knowledge, rule, exact-state, and executable-sequence roles; a lifecycle loop versions and archives memory before the same agent receives a compact approved context bundle](docs/assets/graphical-abstract.png)
 
-![Graphical abstract: an overflowing undifferentiated memory passes through a gate into a brain-shaped system that routes, reviews, and retrieves the right memory](docs/assets/graphical-abstract.png)
+| Brain-inspired principle | AI implementation | Observable outcome |
+|---|---|---|
+| separate events, knowledge, actions, and quantities | episodic/semantic stores, exact state, traced routing | a failure can be traced to the subsystem that owned it instead of being called “retrieval” |
+| gate actions and coordinate learned sequences | deterministic guards and executable fallbacks | disallowed actions are blocked; registered fallback paths continue to success or exhaustion |
+| update memory when reuse reveals change or conflict | approved consolidation, conflict-triggered reconsolidation, and seven lifecycle operations | memories can be promoted, superseded with provenance, compacted, archived, or forgotten |
 
-**Evidence snapshot (2026-07-14):** about 12 weeks in live operation · 13
-project memory indexes · 419 instrumented sessions from 2026-06-10 to 2026-07-14
-· internal A/B tests · public-data retrieval runs over 1,531 LoCoMo and 500
-LongMemEval-S questions. [See what each number does and does not prove.](#evidence-status)
+*The brain-region labels are functional mnemonics, not claims that one
+anatomical region alone performs each function.* The runtime sits around your
+model, retriever, and workflow engine; it does not replace them. See the
+[neuroscience-to-software mapping and its limits](docs/01-the-mapping.md).
+
+> **Evidence boundary.** The public runtime shows that these contracts can be
+> installed and executed, and the operational record shows sustained use.
+> Retrieval tests and contract comparisons measure only their named targets.
+> They do not by themselves prove that the brain-inspired mapping improves
+> end-to-end LLM accuracy over simpler memory. [Evidence and
+> limitations](#evidence-status)
 
 ## Install and run the whole local loop
 
@@ -65,7 +70,7 @@ See the [runtime guide](docs/05-runtime.md), [adapter and observer
 guide](docs/06-adapters-and-observer.md), or the two original
 [single-component examples](examples/README.md).
 
-## You may need this if
+## Diagnose the failure you already see
 
 You build coding, research, operations, or assistant agents that work across
 many sessions, and one or more of these sounds familiar:
@@ -80,12 +85,8 @@ many sessions, and one or more of these sounds familiar:
 
 A single-turn chatbot with no durable state probably does not need this
 architecture. Neither does a workflow whose only problem is ordinary document
-search.
-
-## Why use it?
-
-Start with the failure you already see. You do not need to adopt the whole
-architecture:
+search. Start with the failure you already see; you do not need to adopt the
+whole architecture:
 
 | What you observe | Diagnose first | Smallest useful change |
 |---|---|---|
@@ -102,7 +103,7 @@ operating a persistent, multi-project agent system and debugging failures in
 its memory, semantic retrieval, guards, and executable workflows. The evidence
 below distinguishes that deployment record from causal and benchmark claims.
 
-## Isn’t this just RAG, hooks, harnesses, and loops?
+## How this differs from RAG, hooks, harnesses, and loops
 
 **It uses all of them. It is not a new name for any one of them.** They are
 implementation mechanisms; Brain-AI Memory is the diagnostic and lifecycle
@@ -124,7 +125,7 @@ it. A harness owns a sequence. A loop feeds a verdict back into that sequence.
 They are related but not interchangeable—and none is a complete memory
 architecture.
 
-## What is genuinely different—and what is not?
+### Contribution: differentiated integration, not primitive invention
 
 The honest claim is **differentiated integration, not invention of the
 primitives**. Working, episodic, semantic, and procedural memory categories are
@@ -209,11 +210,31 @@ answer different questions and should not be collapsed into one headline.
 | Has stack-aligned retrieval been compared on a public benchmark? | **Yes—LoCoMo retrieval HIT@10: GTE 62.1%, BM25 57.0%, graph-lite 51.9%; n=1,531 answerable questions** |
 | Does a compact pointer index fit more entries than full append-only entries? | **Yes—deterministic capacity simulation** |
 | Does a simple compact pointer preserve retrieval quality on public data? | **No—current keyword pointers trade recall for size** |
-| Does the public package execute its core routing, recall, exact-state, and gate contracts? | **Reference contract A/B: 14/14; this is conformance, not LLM efficacy** |
+| Does each public runtime component execute a distinct contract? | **Deterministic ablation: full runtime 20/20; flat retrieval control 1/20. The flat control still found the expected top text for 6/6 memory queries; this is conformance, not LLM efficacy** |
 | Does the lifecycle improve answer accuracy for a real LLM agent? | **Not yet measured** |
 | Does the full architecture beat RAG, long context, or another memory system? | **Not yet measured** |
 | Are latency, token cost, conflict resolution, and abstention improved? | **Not yet measured** |
 | How broadly does this single-owner, multi-project deployment generalize? | **Unknown—multi-organization replication is absent** |
+
+### Public runtime component ablation
+
+The installable package was evaluated on 20 deterministic contract cases under
+21 conditions: a flat retrieval control, ten cumulative additions, and ten
+leave-one-out removals. No LLM, external API, private data, or external judge was
+used.
+
+![Cumulative component-contract ablation: the flat control satisfies 1 of 20 contracts and the full public runtime satisfies all 20](docs/assets/component-ablation.png)
+
+The full runtime satisfied 20/20 authored contracts and the flat control
+satisfied 1/20. Importantly, the flat control still retrieved the expected top
+text in all 6/6 memory queries. Its low total reflects the absence of typed
+routing, exact-state, gate, fallback-sequence, and lifecycle contracts—not a
+failure to retrieve text. Every cumulative addition recovered its designated
+cases, and every leave-one-out removal failed the corresponding cases. This is
+evidence that the public components execute distinct software responsibilities;
+it is not evidence that brain inspiration itself improves answer quality or
+that the full architecture beats RAG. See the [report, 420 raw records, summary,
+and manifest](benchmarks/pilots/component-ablation-20260715/README.md).
 
 ### Live operational deployment
 

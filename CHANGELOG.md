@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- 20-case, 21-condition deterministic component-contract ablation with 420 raw
+  records, cumulative additions, leave-one-out removals, artifact hashes, and a
+  reproducible chart.
+
+### Changed
+
+- README opening now explains the brain-inspired functional separation, its
+  translation into software contracts, and the observable user outcome before
+  implementation jargon.
+- neuroscience language now distinguishes functional inspiration from software
+  adaptation and removes one-to-one anatomical or clinical implications.
+
+### Evidence boundary
+
+The new ablation verifies distinct public software contracts. It does not show
+that biological inspiration causes the result, that the runtime improves LLM
+answer quality, or that the architecture beats RAG on an external workload.
+
 ## 0.2.0 — 2026-07-15
 
 Brain-AI Memory changes from an architecture-only extraction into an

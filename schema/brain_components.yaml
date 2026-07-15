@@ -8,79 +8,115 @@
 #
 # The mapping is deliberately at the level of *function*, not implementation.
 # "Graph memory" or "input gate" is a role you can fill with whatever store or
-# hook your stack provides. Adapt the `construct` and `store` fields to your setup;
-# keep the `region`, `function`, `failure_mode`, and `diagnostic` as the invariant.
+# hook your stack provides. Keep the component IDs and software contracts stable.
+# Region and neuroscience-inspiration fields are analogy metadata and should be
+# revised when evidence warrants; no one-to-one localization or homology is implied.
 #
-# Grounding: standard, public neuroscience. Baddeley's working-memory model,
-# hippocampal-to-cortical systems consolidation, procedural learning in the basal
-# ganglia and cerebellum. Nothing here depends on a specific brain theory being
-# correct; the mapping is an engineering analogy that has to earn its keep by
-# making agent failures diagnosable, not a claim about how the brain literally works.
+# Grounding draws on public neuroscience reviews, but several mappings are
+# theory-dependent. Evidence links state both the inspiration and its limits.
+# The ontology is evaluated as an engineering taxonomy, not a biological model.
 
-version: 1
+version: 2
 
 components:
   - id: PFC
-    region: prefrontal cortex
-    function: Executive — set priorities, choose strategy, route work to the right store
+    region: prefrontal cortex within distributed control networks
+    function: Cognitive control — maintain goals and task rules and bias processing across networks
+    neuroscience_inspiration: >
+      Prefrontal regions participate in distributed networks for goal maintenance,
+      working-memory representation, strategy, and cognitive control.
     construct: Orchestrator (the main agent loop + its routing/state logic)
     store: live session + explicit task/plan state
+    software_adaptation: explicit routing decisions, task state, and auditable traces
+    analogy_limit: Biological cognitive control is distributed and adaptive, not a single deterministic dispatcher.
+    evidence:
+      - https://pmc.ncbi.nlm.nih.gov/articles/PMC8616903/
     failure_mode: >
       Wrong routing: pulls from the wrong memory, picks the wrong tool, or never
-      decides at all and thrashes. The "executive dysfunction" failure: capability
-      is present but it is misapplied.
+      decides at all and thrashes. This is a software routing failure, not a
+      clinical equivalence.
     diagnostic: >
       Did the agent consult the right store for this kind of question? Trace one
       decision: which memory did it read, and was that the correct one to read?
 
   - id: HC
-    region: hippocampus
-    function: Episodic — bind events, experiences, and entities into a contextual record
+    region: hippocampal formation within medial-temporal/cortical memory networks
+    function: Rapid relational and contextual binding and reinstatement
+    neuroscience_inspiration: >
+      The hippocampal formation rapidly binds relations among elements of an
+      experience; an index to distributed cortical representations is one
+      influential account.
     construct: Graph / episodic memory (event log + entity relations)
     store: append-only session trace + a structured decision/event log + entity graph
+    software_adaptation: append-only records, stable IDs, timestamps, and preserved provenance
+    analogy_limit: Biological episodic memory is reconstructive and transformable, not an immutable event log.
+    evidence:
+      - https://pubmed.ncbi.nlm.nih.gov/17696170/
+      - https://pubmed.ncbi.nlm.nih.gov/31334573/
     failure_mode: >
       Context breaks: the agent acts on a stale prior, re-asks something already
-      settled, or cannot connect two events that belong together. The amnesia
-      analog, where new experience never anchors to the right context.
+      settled, or cannot connect two events that belong together because the
+      contextual record is missing, ambiguous, or linked incorrectly.
     diagnostic: >
       When the agent recalled a past event, was the binding (who / what / when /
       which thread) intact, or did it confabulate the link?
 
   - id: ATL
-    region: anterior temporal lobe
-    function: Semantic — decontextualized concepts and facts, independent of when they were learned
-    construct: Vector / semantic memory (embeddings over a knowledge base)
-    store: embedded notes / documents, retrieved by similarity
+    region: bilateral anterior temporal lobes within a distributed semantic network
+    function: Transmodal semantic integration within a wider hub-and-control system
+    neuroscience_inspiration: >
+      Bilateral anterior temporal regions are proposed as a transmodal hub, while
+      modality-specific representation and semantic control depend on wider networks.
+    construct: Provenance-bearing semantic memory with lexical or embedding retrieval
+    store: notes / documents / references with source, freshness, and conflict metadata
+    software_adaptation: explicit provenance, freshness checks, and optional vector or lexical indexes
+    analogy_limit: The ATL is not a sole fact store, and a vector index is not a neural homologue.
+    evidence:
+      - https://pubmed.ncbi.nlm.nih.gov/27881854/
     failure_mode: >
       Meaning errors: misreads a concept, follows a dangling link, or treats a
       secondary source as primary. Also *staleness*: an index that fossilizes and
-      keeps returning an outdated view. The semantic-dementia analog.
+      keeps returning an outdated view.
     diagnostic: >
       Is the retrieved knowledge both relevant *and* fresh? Did the agent verify a
       cited claim against the primary source, or trust the embedding's nearest hit?
 
   - id: BG
-    region: basal ganglia
-    function: Procedural-rule — enforce learned rules (what to always / never do)
+    region: cortico-basal-ganglia-thalamo-cortical circuits
+    function: Learned action selection, reinforcement and habit learning, and adaptive gating
+    neuroscience_inspiration: >
+      Basal-ganglia circuits contribute to learned action selection and the
+      context-dependent gating of motor and cognitive representations.
     construct: Rule memory — static (config, instruction files) + dynamic (pre-action guards)
     store: instruction/config files + deterministic pre-action hooks
+    software_adaptation: deterministic pre-action guards harden the gating motif into auditable policy
+    analogy_limit: Biological basal-ganglia gating is adaptive and networked, not a Boolean rule engine.
+    evidence:
+      - https://pubmed.ncbi.nlm.nih.gov/21498067/
+      - https://pubmed.ncbi.nlm.nih.gov/26719851/
     failure_mode: >
-      Knows the rule but does not execute it (the freeze), or executes a forbidden
-      pattern repeatedly despite knowing better (the compulsion). Rule is encoded;
-      the gate that should fire does not.
+      A declared policy is not enforced at action time, or a guard blocks or
+      allows the wrong case.
     diagnostic: >
       For a known rule, is there a deterministic gate that actually fires, or does
       enforcement depend on the model "remembering" in the moment?
 
   - id: CB
-    region: cerebellum
-    function: Procedural-execution — carry a multi-step procedure all the way to completion
+    region: cerebellum within cerebro-cerebellar loops
+    function: Prediction, timing, coordination, sequence processing, and error-based adaptation
+    neuroscience_inspiration: >
+      Cerebellar circuits contribute to prediction, coordination, timing, and
+      error-based adaptation in motor and some cognitive domains.
     construct: Executable harness (a script that owns the fallback loop end-to-end)
     store: runnable code, not prose instructions
+    software_adaptation: executable code owns an arbitrary fallback sequence through completion or explicit failure
+    analogy_limit: A general-purpose workflow runner is a software extension, not a proposed cerebellar mechanism.
+    evidence:
+      - https://pmc.ncbi.nlm.nih.gov/articles/PMC5477675/
+      - https://pubmed.ncbi.nlm.nih.gov/29643480/
     failure_mode: >
       Recalls the procedure but abandons the loop after the first path fails:
-      "tried one thing, gave up." The dysmetria analog, where the sequence is known but
-      not executed to its end.
+      "tried one thing, gave up" before registered alternatives are exhausted.
     diagnostic: >
       Is the multi-step fallback externalized as code that runs to completion, or
       re-narrated by the model each time (and thus quietly droppable mid-loop)?
@@ -91,22 +127,36 @@ components:
       both are "procedural."
 
   - id: IPS
-    region: intraparietal sulcus
-    function: Numerical — exact quantities, counts, and arithmetic (number sense / magnitude)
+    region: intraparietal sulcus within a distributed numerical network
+    function: Quantity and magnitude representation and online calculation, often approximate
+    neuroscience_inspiration: >
+      The intraparietal sulcus is consistently involved in quantity and magnitude
+      processing; exact verbal arithmetic and fact retrieval recruit broader networks.
     construct: Numerical store (a queryable mirror for numbers the model must not estimate)
     store: a small database / structured log of counts and metrics
+    software_adaptation: exact values are delegated to a queryable source of truth
+    analogy_limit: The exact store is a deliberate complement to approximate neural and model magnitude representations, not a replica.
+    evidence:
+      - https://pubmed.ncbi.nlm.nih.gov/20957581/
+      - https://pubmed.ncbi.nlm.nih.gov/14572527/
     failure_mode: >
-      Estimates or misreports a count instead of reading it. The dyscalculia analog
-      ("about a dozen" where the real number was knowable and wrong).
+      Estimates or misreports a count instead of reading it from an authoritative source.
     diagnostic: >
       Was every quantity in the output read from a source, or did some get
       estimated from memory?
 
   - id: TH
-    region: thalamus
-    function: Gating — filter inputs at the door, before they reach processing
+    region: thalamic nuclei within thalamocortical circuits
+    function: Relay and modulate task-relevant signals and coordinate cortical interactions
+    neuroscience_inspiration: >
+      Thalamic nuclei select, amplify, relay, and coordinate signals across
+      distributed thalamocortical networks.
     construct: Input gate (a preventive pre-action filter)
     store: pre-action security/write guards
+    software_adaptation: selective routing is translated into a pre-execution security and policy boundary
+    analogy_limit: The thalamus is not a single perimeter filter or biological security gateway.
+    evidence:
+      - https://pubmed.ncbi.nlm.nih.gov/29184210/
     failure_mode: >
       Dangerous input passes unfiltered: an unsafe deserialization, an injected
       payload, a write that should never have been allowed through.
@@ -118,8 +168,8 @@ components:
 # They are not components and are not counted as such.
 channels:
   - id: consolidation
-    analog: hippocampus-to-cortex replay during sleep
-    direction: episodic (event memory) -> semantic (knowledge base)
+    analog: offline replay and time-dependent systems-level reorganization; sleep can facilitate but is not exclusive
+    direction: episodic evidence -> derived semantic/rule representation; retain and link the source episode
     function: >
       Promote a one-off episode into a reusable, decontextualized pattern. A failure
       handled once becomes a rule everyone can apply next time.
@@ -128,8 +178,8 @@ channels:
       knowledge, and the agent re-derives the same lesson endlessly.
 
   - id: reconsolidation
-    analog: memory restabilization at the moment of retrieval
-    direction: at read-time, update what was retrieved
+    analog: reactivation-dependent destabilization and restabilization under boundary conditions
+    direction: on retrieval, optionally create a versioned superseding update
     function: >
       When a memory is recalled, detect that it is now stale or conflicts with newer
       information, and update it (with human approval) rather than re-acting on the
@@ -140,22 +190,24 @@ channels:
 
 # Optional: a finer-grained diagnostic lens for confident-but-wrong behavior, where a
 # plain component error is not specific enough. Not components; diagnostic aids.
+# These are diagnostic metaphors, not anatomical localization or clinical equivalence.
 clinical_error_lens:
   - name: value-judgment failure
-    brain_analog: ventromedial prefrontal cortex
+    associated_networks: ventromedial prefrontal and wider valuation/control networks
     symptom: acts inappropriately while knowing the rule (loss of social/contextual judgment)
     agent_analog: routes around a denied action, or runs a compound step without permission
 
   - name: confabulation
-    brain_analog: ventromedial PFC / basal forebrain
+    associated_networks: distributed frontal, limbic, memory, and basal-forebrain networks
     symptom: confident fabrication presented as fact
     agent_analog: builds a confident, wrong premise and reasons forward from it (deeper than a plain semantic error)
 
 # A note on "is the loop actually closed?"
 # Existence of a component is one axis; whether its loop runs *without a human in it*
-# is a separate axis worth tracking honestly. In practice only the deterministic gates
-# (BG, TH) close on their own; they are simple allow/deny valves. The semantic and
+# is a separate axis worth tracking honestly. In the current software implementation,
+# BG- and TH-inspired guards close deterministic allow/deny loops. The semantic and
 # executive parts (PFC routing, advisory self-checks) stay open: they depend on the
 # model's judgment in the moment, which is exactly why they cannot be fully automated
-# away. Mapping the brain does not make a hard problem deterministic; it tells you
-# *which* parts are still open, and why.
+# away. This contrast describes the software implementation, not the determinism
+# of biological circuits. Mapping the brain does not make a hard problem
+# deterministic; it tells you *which* software loops are still open, and why.

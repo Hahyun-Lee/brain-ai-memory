@@ -20,6 +20,9 @@ jobs:
           python -m py_compile \
             src/brain_ai_memory/*.py \
             tests/test_runtime.py \
+            tests/test_component_ablation.py \
+            benchmarks/run_component_ablation.py \
+            benchmarks/plot_component_ablation.py \
             benchmarks/run_runtime_contract.py \
             benchmarks/plot_retrieval_tradeoff.py \
             benchmarks/run_longmemeval_pilot.py \
@@ -35,11 +38,17 @@ jobs:
         run: |
           python -W error::ResourceWarning -m unittest discover -s tests -v
           python benchmarks/run_runtime_contract.py --output /tmp/runtime-contract.json
+          python benchmarks/run_component_ablation.py --output /tmp/component-ablation
           python - <<'PY'
           import json
           result = json.load(open('/tmp/runtime-contract.json'))
           runtime = next(row for row in result['summary'] if row['condition'] == 'brain-ai-runtime')
           assert runtime['passed'] == 14 and runtime['total'] == 14
+          ablation = json.load(open('/tmp/component-ablation/summary.json'))
+          conditions = {row['condition']: row for row in ablation['conditions']}
+          assert conditions[ablation['flat_condition']]['passed'] == 1
+          assert conditions[ablation['full_condition']]['passed'] == 20
+          assert ablation['record_count'] == 420
           PY
           runtime_home="$(mktemp -d)"
           brain-ai --home "$runtime_home" init
@@ -79,6 +88,18 @@ jobs:
               for name in ("predictions.jsonl", "retrieval.jsonl"):
                   records = [json.loads(line) for line in (run_dir / name).read_text().splitlines()]
                   assert len(records) == 500, f"{run_dir.name}: {name}"
+
+          ablation_root = Path("benchmarks/pilots/component-ablation-20260715")
+          manifest = json.loads((ablation_root / "manifest.json").read_text())
+          assert manifest["repository_dirty"] is False
+          assert manifest["input_sha256"]["runner"] == hashlib.sha256(
+              Path("benchmarks/run_component_ablation.py").read_bytes()
+          ).hexdigest()
+          for name, expected in manifest["artifact_sha256"].items():
+              actual = hashlib.sha256((ablation_root / name).read_bytes()).hexdigest()
+              assert actual == expected, name
+          records = (ablation_root / "records.jsonl").read_text().splitlines()
+          assert len(records) == 420
           PY
           for manifest in benchmarks/pilots/longmemeval-s-retrieval-20260714/*/manifest.json; do
             python benchmarks/validate_manifest.py "$manifest"

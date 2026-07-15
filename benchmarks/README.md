@@ -1,7 +1,8 @@
 # Benchmark protocol
 
-**Status: one reproducible full-dataset retrieval pilot completed; internal
-operational A/B results exist; no release-grade public QA run completed.**
+**Status: one reproducible full-dataset retrieval pilot and one deterministic
+public-runtime component ablation completed; internal operational A/B results
+exist; no release-grade public QA run completed.**
 
 This directory defines what must be true before Brain-AI Memory can make a
 public comparative performance claim. The live deployment and internal A/B
@@ -41,7 +42,7 @@ Long-term QA can test episodic/semantic memory and the two transfer channels.
 Rule gating, fallback completion, exact numerical state, and input filtering
 need separate task suites and must not be declared validated by a QA score.
 
-## Public runtime contract A/B
+## Public runtime contract checks and ablation
 
 [`run_runtime_contract.py`](run_runtime_contract.py) compares the installable
 runtime with a flat retrieval-only control on 14 deterministic cases covering
@@ -54,6 +55,22 @@ component contracts?” The cases are designed around those contracts, so the
 score is not evidence that the system improves LLM QA, general agent quality,
 or performance on an external workload. The flat control is also much faster;
 quality and overhead must both be measured in later external evaluation.
+
+The broader [component-contract
+ablation](pilots/component-ablation-20260715/README.md) evaluates 20 authored
+cases under 21 conditions: a flat retrieval control, ten cumulative component
+additions, and ten leave-one-out removals. The full runtime scored 20/20 and the
+flat control scored 1/20, while the flat control still retrieved the expected
+top text for all 6/6 memory queries. The difference therefore measures typed
+routing, exact-state, gating, fallback, and lifecycle contract coverage—not a
+general retrieval or answer-quality advantage. The run publishes 420 raw
+records, a summary, and a manifest with artifact hashes.
+
+Reproduce the cumulative chart with:
+
+```bash
+python3 benchmarks/plot_component_ablation.py
+```
 
 ## Preregistered hypotheses
 
@@ -168,6 +185,10 @@ rows, never as a direct comparison.
 ## Ablations
 
 The full system must be decomposed so the source of a gain is visible:
+
+The deterministic public-runtime ablation above now verifies component-contract
+separation. The following ablations still refer to the pending external LLM QA
+evaluation and cannot be replaced by that conformance result:
 
 1. pointer index without lifecycle migration;
 2. episodic/semantic separation;

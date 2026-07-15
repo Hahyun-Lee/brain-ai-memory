@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "run_id": "component-ablation-20260715",
+  "status": "complete",
+  "benchmark": "Brain-AI public runtime component-contract ablation",
+  "claim_scope": "deterministic component-contract conformance only; not external LLM QA or agent-quality efficacy",
+  "release_grade_external_benchmark": false,
+  "generated_at": "2026-07-15T01:28:03+00:00",
+  "repository_commit": "d25bd970e83b12a804ff5a05c49c6ed001d84eb1",
+  "repository_dirty": true,
+  "execution": {
+    "python": "3.12.2",
+    "external_llm_or_api": false,
+    "case_count": 20,
+    "condition_count": 21,
+    "record_count": 420
+  },
+  "condition_matrix": [
+    {
+      "name": "flat-retrieval-control",
+      "family": "control",
+      "enabled_features": [],
+      "changed_feature": null
+    },
+    {
+      "name": "cumulative-01-pfc-routing",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing"
+      ],
+      "changed_feature": "pfc_routing"
+    },
+    {
+      "name": "cumulative-02-atl-semantic",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic"
+      ],
+      "changed_feature": "atl_semantic"
+    },
+    {
+      "name": "cumulative-03-hc-episodic",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic"
+      ],
+      "changed_feature": "hc_episodic"
+    },
+    {
+      "name": "cumulative-04-ips-state",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state"
+      ],
+      "changed_feature": "ips_state"
+    },
+    {
+      "name": "cumulative-05-th-gate",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate"
+      ],
+      "changed_feature": "th_gate"
+    },
+    {
+      "name": "cumulative-06-bg-rules",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules"
+      ],
+      "changed_feature": "bg_rules"
+    },
+    {
+      "name": "cumulative-07-cb-sequence",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence"
+      ],
+      "changed_feature": "cb_sequence"
+    },
+    {
+      "name": "cumulative-08-consolidation",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation"
+      ],
+      "changed_feature": "consolidation"
+    },
+    {
+      "name": "cumulative-09-reconsolidation",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation",
+        "reconsolidation"
+      ],
+      "changed_feature": "reconsolidation"
+    },
+    {
+      "name": "cumulative-10-checkpoint",
+      "family": "cumulative",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation",
+        "reconsolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "checkpoint"
+    },
+    {
+      "name": "remove-pfc-routing",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation",
+        "reconsolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "pfc_routing"
+    },
+    {
+      "name": "remove-atl-semantic",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "pfc_routing",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation",
+        "reconsolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "atl_semantic"
+    },
+    {
+      "name": "remove-hc-episodic",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation",
+        "reconsolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "hc_episodic"
+    },
+    {
+      "name": "remove-ips-state",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation",
+        "reconsolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "ips_state"
+    },
+    {
+      "name": "remove-th-gate",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation",
+        "reconsolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "th_gate"
+    },
+    {
+      "name": "remove-bg-rules",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "cb_sequence",
+        "consolidation",
+        "reconsolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "bg_rules"
+    },
+    {
+      "name": "remove-cb-sequence",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "consolidation",
+        "reconsolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "cb_sequence"
+    },
+    {
+      "name": "remove-consolidation",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "reconsolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "consolidation"
+    },
+    {
+      "name": "remove-reconsolidation",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation",
+        "checkpoint"
+      ],
+      "changed_feature": "reconsolidation"
+    },
+    {
+      "name": "remove-checkpoint",
+      "family": "leave-one-out",
+      "enabled_features": [
+        "pfc_routing",
+        "atl_semantic",
+        "hc_episodic",
+        "ips_state",
+        "th_gate",
+        "bg_rules",
+        "cb_sequence",
+        "consolidation",
+        "reconsolidation"
+      ],
+      "changed_feature": "checkpoint"
+    }
+  ],
+  "input_sha256": {
+    "cases": "537449fa75f4303e86e131f2cb1305bd67240125fab44198c6e47297816e5f83",
+    "runner": "45b6d793b714a221a19901f84f8b632dfd91ef3b0191ea25d2c782d7f96c200f"
+  },
+  "artifact_sha256": {
+    "records.jsonl": "0b48404f1a0166f85e48d5d0731fafda0d1f829a11da51fa918dc32a8cce6579",
+    "summary.json": "3d8cc2aa39bff57bec62f96f6ffe49457e22f006dcf8f70d7069202e24538b31",
+    "README.md": "16c9b92ffaebe37b99712d7ba839e220fc4b934d167a3b8a2480f4cb9ccc3285"
+  }
+}

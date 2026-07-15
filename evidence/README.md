@@ -14,7 +14,10 @@ The evidence is separated by what it can support:
    machine-readable numbers behind that report.
 3. The capacity simulation below: a reproducible mechanism test using synthetic
    data.
-4. [Public benchmark artifacts](../benchmarks/README.md): reproducible public
+4. [Public component-contract ablation](../benchmarks/pilots/component-ablation-20260715/README.md):
+   20 deterministic cases under 21 cumulative and leave-one-out conditions,
+   with 420 raw records. It tests software conformance, not LLM efficacy.
+5. [Public benchmark artifacts](../benchmarks/README.md): reproducible public
    data pilots and the release gate for external QA claims.
 
 ## What is claimed, and what is not

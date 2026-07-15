@@ -19,10 +19,11 @@ do so. Two failures follow, and they pull in opposite directions:
 - **Loss.** To fight bloat, things get deleted wholesale, and a decision that mattered six months
   later is gone with no trace.
 
-The brain avoids both by *moving* memories rather than only keeping or dropping them. A specific
-episode consolidates into general knowledge. A repeated action becomes an automatic procedure. An
-unused trace decays but stays cued. The lifecycle below is the agent version: a small set of
-operations and a rule for choosing between them, applied to every entry.
+Biological memory motivates the idea that representations can be reorganized,
+transformed, strengthened, or weakened over time rather than merely accumulated.
+The lifecycle below is a deliberate software translation—not a biological
+simulation: a small set of explicit, auditable operations and a rule for
+choosing among them.
 
 ## The seven operations
 
@@ -33,16 +34,18 @@ Every memory entry, when you next look at it, gets exactly one of these:
 | **keep** | Still active, still referenced, or carries no signal that it has been superseded | Left in place, unchanged |
 | **compact** | The point survives but the detail no longer earns its space | Shrunk to a one-line pointer; the link is preserved |
 | **archive** | Resolved, old, and captured elsewhere (a rule, a commit, a downstream doc) | Body moved to an archive file; a one-line link stays in the index |
-| **migrate-to-knowledge-base** | A reusable principle or method, useful beyond this one context | Rewritten as a decontextualized note in the semantic store; the operational entry is archived |
-| **migrate-to-rules** | A repeatable procedure that can be written down as steps | Moved into the procedural rule set; the operational entry is archived |
+| **migrate-to-knowledge-base** | A reusable principle or method, useful beyond this one context | A linked semantic note is derived with provenance; the source entry is retained but marked migrated |
+| **migrate-to-rules** | A repeatable procedure that can be expressed as an enforceable rule or executable step | A linked rule or harness is created with approval; the source entry is retained but marked migrated |
 | **delete** | Wrong or superseded by a later decision, with nothing worth keeping | Removed entirely, archive included. Used sparingly |
 | **split** | One entry has grown to cover several distinct topics | Broken into separate topic files, each linked from the index |
 
-Two of these correspond directly to the consolidation channel from
-[`01`](01-the-mapping.md#the-two-channels): **migrate-to-knowledge-base** is episodic-to-semantic
-promotion (a specific event becomes general knowledge), and **migrate-to-rules** is the procedural
-version (a repeated fix becomes an automatic step). The rest are housekeeping that keeps the
-episodic store legible enough for that promotion to happen at all.
+Two of these implement the consolidation-inspired software channel from
+[`01`](01-the-mapping.md#the-two-channels): **migrate-to-knowledge-base** derives
+reusable knowledge from episodic evidence, and **migrate-to-rules** turns an
+approved repeated lesson into an enforceable rule or executable step. Neither
+operation claims to reproduce biological consolidation. The rest are
+housekeeping that keeps the episodic store legible enough for promotion to
+happen at all.
 
 ### Choosing between them
 
@@ -68,8 +71,9 @@ not gone, and can be recalled by a cue; deleted memory cannot.
 
 ## Session to long-term transfer
 
-The lifecycle above governs entries at rest. There is also a flow *through* a session, and it maps
-onto the same brain analogy.
+The lifecycle above governs entries at rest. There is also an explicit software
+flow *through* a session, using the same mnemonic labels without asserting a
+biological transfer mechanism.
 
 - **Session start (recall).** Long-term memory loads into working memory: the index, recent
   decisions, open threads. The agent reconstructs where it left off rather than starting blank. This

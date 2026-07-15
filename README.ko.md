@@ -2,33 +2,37 @@
 
 # Brain-AI Memory
 
-> 또 하나의 메모리 데이터베이스가 아닙니다. 장기간 동작하는 LLM
-> 에이전트를 위한 진단·제어 아키텍처입니다.
+> **여러 세션에 걸쳐 올바른 맥락을 기억하고, 규칙을 강제하고, 정확한 상태를
+> 보존하고, 절차를 끝까지 수행해야 하는 에이전트를 위한 local-first
+> memory/control runtime입니다.**
 
-**에이전트에게는 아마 하나의 '메모리 문제'만 있는 것이 아닙니다.**
-RAG는 후보 문맥을 검색할 수 있습니다. hook에 연결된 guard는 행동을 막을
-수 있습니다. harness는 워크플로를 끝까지 실행할 수 있고, loop는 재시도할
-수 있습니다. 그러나 그중 어느 하나만으로는 에이전트가 왜 이미 결정된 것을
-다시 묻는지, 오래된 지식을 사용하는지, 규칙을 무시하는지, 한 번 실패한 뒤
-멈추는지, 또는 지속 문맥을 생명주기 없이 계속 키우는지 설명할 수 없습니다.
+**지금 설치 가능:** public alpha `v0.2`. Local demo에는 API key, model call,
+database server, 외부 service가 필요하지 않습니다.
 
-Brain-AI Memory는 이런 실패에 서로 다른 이름, 메커니즘, 복구 경로를
-부여합니다. 에이전트가 무엇을 기억하고, 검색하고, 강제하고, 실행하고,
-갱신하고, 보관하고, 잊어야 하는지 결정하도록 돕습니다.
+인간의 기억과 행동 조절은 하나의 저장소가 아니라 서로 구분되면서 상호작용하는
+여러 기능에 의존합니다. Brain-AI Memory는 **뇌의 해부학을 그대로 모사하지
+않고 기능적 분화라는 설계 원칙**을 가져와 store, routing, deterministic
+guard, executable fallback sequence, lifecycle operation이라는 검사 가능한
+software contract로 번역합니다.
 
-**프로젝트 상태:** 설치 가능한 public alpha(`v0.2`)입니다. 2026년 4월
-20일부터 실제로 사용해 온 시스템의 clean-room 공개판으로, 이제 아키텍처뿐
-아니라 differentiated store, routing, guard, executable fallback sequence,
-checkpoint, consolidation, reconsolidation, semantic adapter, read-only
-observer를 포함한 local-first reference runtime을 제공합니다. 비공개 운영
-데이터와 조직별 wiring은 제외했습니다. 검증 현황은 아래에 구분해 제시합니다.
+![Graphical abstract: 혼란스러운 agent의 뒤섞인 history가 input gate를 거쳐 event, knowledge, rule, exact state, executable sequence가 분리된 brain-inspired software runtime으로 들어가고, lifecycle loop가 memory를 versioning·archive한 뒤 같은 agent가 compact하고 승인된 context bundle을 받는 과정](docs/assets/graphical-abstract.png)
 
-![Graphical abstract: 뒤섞여 넘치는 메모리가 gate를 통과해 brain-shaped system에서 올바른 기억으로 routing, review, retrieval되는 과정](docs/assets/graphical-abstract.png)
+| 뇌에서 착안한 원리 | AI 구현 | 관찰 가능한 결과 |
+|---|---|---|
+| 사건·지식·행동·수량 기능을 분리 | episodic/semantic store, exact state, traced routing | 모든 실패를 ‘retrieval 문제’로 뭉개지 않고 담당 subsystem까지 추적 |
+| 행동을 gate하고 숙련된 sequence를 조정 | deterministic guard와 executable fallback | 금지 행동은 차단되고 등록된 fallback은 성공 또는 소진까지 진행 |
+| 재사용 과정에서 변화나 충돌이 드러난 기억을 갱신 | 승인된 consolidation, conflict-triggered reconsolidation, 7가지 lifecycle operation | provenance를 보존하며 승격·대체·압축·보관·망각 가능 |
 
-**근거 스냅샷(2026-07-14):** 실제 운영 약 12주 · 프로젝트 메모리 인덱스
-13개 · 2026-06-10부터 2026-07-14까지 계측된 세션 419개 · 내부 A/B 테스트 ·
-LoCoMo 1,531문항과 LongMemEval-S 500문항의 공개 데이터 retrieval 실행.
-[각 수치가 무엇을 입증하고 무엇을 입증하지 않는지 확인하세요.](#근거-현황)
+*뇌 영역 이름은 기능을 기억하기 위한 표지이며, 각 영역이 해당 기능을 단독
+수행한다는 해부학적 주장이 아닙니다.* 이 runtime은 기존 model, retriever,
+workflow engine 주변에서 작동하며 이를 대체하지 않습니다. [뇌 기능에서
+software contract로의 mapping과 한계](docs/01-the-mapping.md)를 함께 공개합니다.
+
+> **근거의 경계.** 공개 runtime은 이 contract들을 설치하고 실행할 수 있음을,
+> 운영 기록은 지속적으로 사용했음을 보여줍니다. Retrieval test와 contract
+> 비교는 각각 명시한 대상만 측정합니다. 이것만으로 brain-inspired mapping이
+> 단순한 memory보다 end-to-end LLM 정확도를 높였다고 주장하지 않습니다.
+> [근거와 한계](#근거-현황)
 
 ## 전체 local loop 설치하고 실행하기
 
@@ -64,7 +68,7 @@ brain-ai serve                # http://127.0.0.1:8765
 guide](docs/06-adapters-and-observer.ko.md), 기존 [single-component
 example](examples/README.md)을 참고하세요.
 
-## 이런 문제가 있다면 필요할 수 있습니다
+## 이미 겪고 있는 실패부터 진단하세요
 
 여러 세션에 걸쳐 동작하는 코딩, 연구, 운영, 비서 에이전트를 만들고 있으며
 다음 중 하나라도 익숙하다면 살펴볼 가치가 있습니다.
@@ -77,12 +81,8 @@ example](examples/README.md)을 참고하세요.
 - "메모리 파일만 계속 커지고 무엇을 compact하거나 지워야 할지 모르겠다."
 
 지속 상태가 없는 단일 턴 챗봇에는 이 아키텍처가 필요하지 않을 가능성이
-큽니다. 문제가 일반적인 문서 검색뿐인 워크플로에도 필요하지 않습니다.
-
-## 왜 사용해야 하나요?
-
-이미 겪고 있는 실패에서 시작하세요. 전체 아키텍처를 한꺼번에 채택할 필요는
-없습니다.
+큽니다. 문제가 일반적인 문서 검색뿐인 워크플로에도 필요하지 않습니다. 이미
+겪고 있는 실패부터 시작하세요. 전체 아키텍처를 한꺼번에 채택할 필요는 없습니다.
 
 | 관찰한 문제 | 먼저 진단할 대상 | 가장 작은 유효한 변화 |
 |---|---|---|
@@ -99,7 +99,7 @@ example](examples/README.md)을 참고하세요.
 guard, executable workflow의 실패를 디버깅하는 과정에서 분리됐습니다. 아래
 근거에서는 이 운영 기록을 인과 주장 및 benchmark 주장과 구분합니다.
 
-## 결국 RAG, hook, harness, loop 아닌가요?
+## RAG, hook, harness, loop와 어떻게 다른가요?
 
 **모두 사용하지만 어느 하나를 새 이름으로 부르는 것은 아닙니다.** 이들은
 구현 메커니즘입니다. Brain-AI Memory는 각 메커니즘에 역할, 실패 조건,
@@ -121,7 +121,7 @@ Harness는 sequence를 소유하고, loop는 verdict를 다시 그 sequence에
 반영합니다. 서로 관련은 있지만 대체 가능하지 않으며, 어느 하나도 완전한
 메모리 아키텍처는 아닙니다.
 
-## 무엇이 정말 다르고, 무엇은 다르지 않나요?
+### 기여: 원시 요소의 발명이 아니라 구분된 통합
 
 정확한 주장은 **원시 요소의 발명이 아니라 구분된 통합**입니다. Working,
 episodic, semantic, procedural memory 범주는 이미 확립된 개념이고, RAG,
@@ -203,11 +203,31 @@ reproducible public-data evaluation이라는 서로 다른 세 가지 근거 계
 | 공개 benchmark에서 stack-aligned retrieval을 비교했는가? | **예. LoCoMo retrieval HIT@10: GTE 62.1%, BM25 57.0%, graph-lite 51.9%; answerable questions n=1,531** |
 | compact pointer index가 full append-only entry보다 더 많이 들어가는가? | **예. 결정론적 capacity simulation** |
 | 단순 compact pointer가 공개 데이터에서 retrieval quality를 보존하는가? | **아니요. 현재 keyword pointer는 recall과 size를 교환함** |
-| 공개 package가 core routing, recall, exact-state, gate contract를 실행하는가? | **Reference contract A/B 14/14. Conformance이며 LLM efficacy가 아님** |
+| 공개 runtime의 각 component가 서로 다른 contract를 실행하는가? | **Deterministic ablation: 전체 runtime 20/20, flat retrieval control 1/20. Flat control도 memory query 6/6에서 예상 top text를 찾았으며, 이는 conformance이지 LLM efficacy가 아님** |
 | lifecycle이 실제 LLM agent의 answer accuracy를 개선하는가? | **아직 측정하지 않음** |
 | 전체 아키텍처가 RAG, long context 또는 다른 memory system보다 나은가? | **아직 측정하지 않음** |
 | latency, token cost, conflict resolution, abstention이 개선되는가? | **아직 측정하지 않음** |
 | single-owner multi-project deployment가 얼마나 일반화되는가? | **알 수 없음. 다기관 반복 검증 없음** |
+
+### 공개 runtime component ablation
+
+설치 가능한 package를 20개의 deterministic contract case와 21개 condition에서
+평가했습니다. 조건은 flat retrieval control, 10개의 누적 addition, 10개의
+leave-one-out removal입니다. LLM, 외부 API, 비공개 data, 외부 judge는 사용하지
+않았습니다.
+
+![누적 component-contract ablation: flat control은 20개 중 1개, 전체 public runtime은 20개 contract 모두 충족](docs/assets/component-ablation.png)
+
+전체 runtime은 작성된 contract 20/20을 충족했고 flat control은 1/20을
+충족했습니다. 중요한 점은 flat control도 memory query 6/6에서 예상 top text를
+모두 찾았다는 것입니다. 낮은 전체 점수는 text retrieval 실패가 아니라 typed
+routing, exact state, gate, fallback sequence, lifecycle contract의 부재를
+반영합니다. 각 component를 누적했을 때 지정된 case가 복구됐고, 전체에서 하나를
+제거했을 때 해당 case가 실패했습니다. 이는 공개 component들이 서로 다른
+software responsibility를 실행한다는 근거이며, 뇌에서 영감을 받았다는 사실
+자체가 answer quality를 높인다거나 전체 아키텍처가 RAG보다 우월하다는 근거는
+아닙니다. [Report, raw record 420개, summary,
+manifest](benchmarks/pilots/component-ablation-20260715/README.md)를 확인하세요.
 
 ### 실제 운영 배포
 

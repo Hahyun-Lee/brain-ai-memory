@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
-  <title id="title">Brain-inspired memory architecture for LLM agents</title>
-  <desc id="desc">Input passes through a thalamus-inspired gate to a prefrontal orchestrator, which routes work to episodic, semantic, rule, execution, and numerical systems. Episodic and semantic memory are linked by consolidation and reconsolidation.</desc>
+  <title id="title">Brain-inspired software responsibility map for LLM agents</title>
+  <desc id="desc">A software input gate routes through an explicit orchestrator to episodic, semantic, rule, execution, and exact-state contracts. Consolidation and reconsolidation are versioned lifecycle operations. Brain labels are functional mnemonics, not anatomical claims.</desc>
   <defs>
     <marker id="arrow-navy" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
       <path d="M0,0 L12,6 L0,12 z" fill="#334155"/>
@@ -30,9 +30,9 @@
 
   <rect width="1200" height="760" rx="24" fill="#F8FAFC"/>
 
-  <text x="54" y="45" class="eyebrow" fill="#2563EB">ARCHITECTURE OVERVIEW</text>
+  <text x="54" y="45" class="eyebrow" fill="#2563EB">SOFTWARE RESPONSIBILITY MAP</text>
   <text x="54" y="82" class="title">A memory system you can diagnose component by component</text>
-  <text x="54" y="111" class="subtitle">Seven components, two memory channels, and a distinct failure mode for each part.</text>
+  <text x="54" y="111" class="subtitle">Seven engineering roles, two lifecycle channels, and a distinct failure contract for each part.</text>
 
   <text x="54" y="159" class="eyebrow" fill="#64748B">INPUT</text>
   <rect x="54" y="176" width="224" height="126" rx="18" fill="#E0F2FE" stroke="#7DD3FC" stroke-width="1.5"/>
@@ -114,5 +114,5 @@
   <text x="548" y="639" class="node-copy">BG blocks a decision; CB completes a sequence.</text>
 
   <rect x="50" y="716" width="1098" height="1" fill="#CBD5E1"/>
-  <text x="50" y="741" class="subtitle">Engineering analogy, not a literal model of neuroanatomy.</text>
+  <text x="50" y="741" class="subtitle">Brain labels are functional mnemonics—not anatomical localization, homology, or biological simulation.</text>
 </svg>

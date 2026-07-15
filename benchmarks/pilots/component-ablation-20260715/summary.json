@@ -1,0 +1,1284 @@
+{
+  "benchmark": "Brain-AI public runtime component-contract ablation",
+  "claim_scope": "deterministic component-contract conformance only; not external LLM QA or agent-quality efficacy",
+  "case_count": 20,
+  "condition_count": 21,
+  "record_count": 420,
+  "flat_condition": "flat-retrieval-control",
+  "full_condition": "cumulative-10-checkpoint",
+  "flat_retrieval_diagnostic": {
+    "top_id_matches": 6,
+    "memory_query_count": 6,
+    "note": "content retrieval only; typed component and exact-value checks are scored separately"
+  },
+  "conditions": [
+    {
+      "condition": "flat-retrieval-control",
+      "passed": 1,
+      "total": 20,
+      "accuracy": 0.05,
+      "mean_latency_ms": 1.646,
+      "p95_latency_ms": 13.915,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 0,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 0,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 0,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 1,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 0,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 0,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 0,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 0,
+      "delta_vs_full": -19
+    },
+    {
+      "condition": "cumulative-01-pfc-routing",
+      "passed": 3,
+      "total": 20,
+      "accuracy": 0.15,
+      "mean_latency_ms": 1.582,
+      "p95_latency_ms": 13.347,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 0,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 0,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 0,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 1,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 0,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 0,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 2,
+      "delta_vs_full": -17
+    },
+    {
+      "condition": "cumulative-02-atl-semantic",
+      "passed": 5,
+      "total": 20,
+      "accuracy": 0.25,
+      "mean_latency_ms": 1.582,
+      "p95_latency_ms": 13.137,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 0,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 0,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 0,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 1,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 0,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 4,
+      "delta_vs_full": -15
+    },
+    {
+      "condition": "cumulative-03-hc-episodic",
+      "passed": 7,
+      "total": 20,
+      "accuracy": 0.35,
+      "mean_latency_ms": 1.672,
+      "p95_latency_ms": 13.842,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 0,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 0,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 0,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 1,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 0,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 6,
+      "delta_vs_full": -13
+    },
+    {
+      "condition": "cumulative-04-ips-state",
+      "passed": 9,
+      "total": 20,
+      "accuracy": 0.45,
+      "mean_latency_ms": 1.696,
+      "p95_latency_ms": 13.611,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 0,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 0,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 1,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 0,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 8,
+      "delta_vs_full": -11
+    },
+    {
+      "condition": "cumulative-05-th-gate",
+      "passed": 11,
+      "total": 20,
+      "accuracy": 0.55,
+      "mean_latency_ms": 1.732,
+      "p95_latency_ms": 13.648,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 0,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 0,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 0,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 10,
+      "delta_vs_full": -9
+    },
+    {
+      "condition": "cumulative-06-bg-rules",
+      "passed": 13,
+      "total": 20,
+      "accuracy": 0.65,
+      "mean_latency_ms": 1.678,
+      "p95_latency_ms": 13.138,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 0,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 0,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 12,
+      "delta_vs_full": -7
+    },
+    {
+      "condition": "cumulative-07-cb-sequence",
+      "passed": 15,
+      "total": 20,
+      "accuracy": 0.75,
+      "mean_latency_ms": 3.125,
+      "p95_latency_ms": 26.893,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 0,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 14,
+      "delta_vs_full": -5
+    },
+    {
+      "condition": "cumulative-08-consolidation",
+      "passed": 18,
+      "total": 20,
+      "accuracy": 0.9,
+      "mean_latency_ms": 3.248,
+      "p95_latency_ms": 27.034,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 17,
+      "delta_vs_full": -2
+    },
+    {
+      "condition": "cumulative-09-reconsolidation",
+      "passed": 19,
+      "total": 20,
+      "accuracy": 0.95,
+      "mean_latency_ms": 3.359,
+      "p95_latency_ms": 26.92,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 18,
+      "delta_vs_full": -1
+    },
+    {
+      "condition": "cumulative-10-checkpoint",
+      "passed": 20,
+      "total": 20,
+      "accuracy": 1.0,
+      "mean_latency_ms": 3.039,
+      "p95_latency_ms": 25.788,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 19,
+      "delta_vs_full": 0
+    },
+    {
+      "condition": "remove-pfc-routing",
+      "passed": 12,
+      "total": 20,
+      "accuracy": 0.6,
+      "mean_latency_ms": 2.88,
+      "p95_latency_ms": 25.116,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 0,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 0,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 0,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 11,
+      "delta_vs_full": -8
+    },
+    {
+      "condition": "remove-atl-semantic",
+      "passed": 18,
+      "total": 20,
+      "accuracy": 0.9,
+      "mean_latency_ms": 3.054,
+      "p95_latency_ms": 25.329,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 0,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 17,
+      "delta_vs_full": -2
+    },
+    {
+      "condition": "remove-hc-episodic",
+      "passed": 18,
+      "total": 20,
+      "accuracy": 0.9,
+      "mean_latency_ms": 3.163,
+      "p95_latency_ms": 25.72,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 17,
+      "delta_vs_full": -2
+    },
+    {
+      "condition": "remove-ips-state",
+      "passed": 18,
+      "total": 20,
+      "accuracy": 0.9,
+      "mean_latency_ms": 2.934,
+      "p95_latency_ms": 25.214,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 0,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 17,
+      "delta_vs_full": -2
+    },
+    {
+      "condition": "remove-th-gate",
+      "passed": 18,
+      "total": 20,
+      "accuracy": 0.9,
+      "mean_latency_ms": 3.146,
+      "p95_latency_ms": 27.13,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 1,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 17,
+      "delta_vs_full": -2
+    },
+    {
+      "condition": "remove-bg-rules",
+      "passed": 18,
+      "total": 20,
+      "accuracy": 0.9,
+      "mean_latency_ms": 3.117,
+      "p95_latency_ms": 26.315,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 0,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 17,
+      "delta_vs_full": -2
+    },
+    {
+      "condition": "remove-cb-sequence",
+      "passed": 18,
+      "total": 20,
+      "accuracy": 0.9,
+      "mean_latency_ms": 1.794,
+      "p95_latency_ms": 13.542,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 0,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 17,
+      "delta_vs_full": -2
+    },
+    {
+      "condition": "remove-consolidation",
+      "passed": 17,
+      "total": 20,
+      "accuracy": 0.85,
+      "mean_latency_ms": 3.192,
+      "p95_latency_ms": 28.148,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 0,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 16,
+      "delta_vs_full": -3
+    },
+    {
+      "condition": "remove-reconsolidation",
+      "passed": 19,
+      "total": 20,
+      "accuracy": 0.95,
+      "mean_latency_ms": 3.432,
+      "p95_latency_ms": 29.052,
+      "by_category": {
+        "checkpoint": {
+          "passed": 1,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 0,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 18,
+      "delta_vs_full": -1
+    },
+    {
+      "condition": "remove-checkpoint",
+      "passed": 19,
+      "total": 20,
+      "accuracy": 0.95,
+      "mean_latency_ms": 3.133,
+      "p95_latency_ms": 25.929,
+      "by_category": {
+        "checkpoint": {
+          "passed": 0,
+          "total": 1
+        },
+        "consolidation": {
+          "passed": 3,
+          "total": 3
+        },
+        "episodic_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "exact_state": {
+          "passed": 2,
+          "total": 2
+        },
+        "executable_sequence": {
+          "passed": 2,
+          "total": 2
+        },
+        "input_gate": {
+          "passed": 3,
+          "total": 3
+        },
+        "procedural_rule": {
+          "passed": 2,
+          "total": 2
+        },
+        "reconsolidation": {
+          "passed": 1,
+          "total": 1
+        },
+        "routing": {
+          "passed": 2,
+          "total": 2
+        },
+        "semantic_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "delta_vs_flat": 18,
+      "delta_vs_full": -1
+    }
+  ],
+  "component_effects": [
+    {
+      "feature": "pfc_routing",
+      "label": "PFC · goal-aware component routing",
+      "cumulative_condition": "cumulative-01-pfc-routing",
+      "cumulative_score": 3,
+      "newly_recovered_cases": [
+        "pfc_route_numeric",
+        "pfc_route_procedure"
+      ],
+      "leave_one_out_condition": "remove-pfc-routing",
+      "leave_one_out_score": 12,
+      "drop_from_full": 8,
+      "failed_without_feature": [
+        "atl_privacy_policy",
+        "atl_release_policy",
+        "hc_cache_incident",
+        "hc_schedule_change",
+        "ips_open_reviews",
+        "ips_retry_failures",
+        "pfc_route_numeric",
+        "pfc_route_procedure"
+      ]
+    },
+    {
+      "feature": "atl_semantic",
+      "label": "ATL · semantic knowledge",
+      "cumulative_condition": "cumulative-02-atl-semantic",
+      "cumulative_score": 5,
+      "newly_recovered_cases": [
+        "atl_privacy_policy",
+        "atl_release_policy"
+      ],
+      "leave_one_out_condition": "remove-atl-semantic",
+      "leave_one_out_score": 18,
+      "drop_from_full": 2,
+      "failed_without_feature": [
+        "atl_privacy_policy",
+        "atl_release_policy"
+      ]
+    },
+    {
+      "feature": "hc_episodic",
+      "label": "HC · timestamped episodes",
+      "cumulative_condition": "cumulative-03-hc-episodic",
+      "cumulative_score": 7,
+      "newly_recovered_cases": [
+        "hc_cache_incident",
+        "hc_schedule_change"
+      ],
+      "leave_one_out_condition": "remove-hc-episodic",
+      "leave_one_out_score": 18,
+      "drop_from_full": 2,
+      "failed_without_feature": [
+        "hc_cache_incident",
+        "hc_schedule_change"
+      ]
+    },
+    {
+      "feature": "ips_state",
+      "label": "IPS · typed exact numerical state",
+      "cumulative_condition": "cumulative-04-ips-state",
+      "cumulative_score": 9,
+      "newly_recovered_cases": [
+        "ips_open_reviews",
+        "ips_retry_failures"
+      ],
+      "leave_one_out_condition": "remove-ips-state",
+      "leave_one_out_score": 18,
+      "drop_from_full": 2,
+      "failed_without_feature": [
+        "ips_open_reviews",
+        "ips_retry_failures"
+      ]
+    },
+    {
+      "feature": "th_gate",
+      "label": "TH · deterministic input/action gate",
+      "cumulative_condition": "cumulative-05-th-gate",
+      "cumulative_score": 11,
+      "newly_recovered_cases": [
+        "th_pipe_shell",
+        "th_root_delete"
+      ],
+      "leave_one_out_condition": "remove-th-gate",
+      "leave_one_out_score": 18,
+      "drop_from_full": 2,
+      "failed_without_feature": [
+        "th_pipe_shell",
+        "th_root_delete"
+      ]
+    },
+    {
+      "feature": "bg_rules",
+      "label": "BG · stored procedural rules",
+      "cumulative_condition": "cumulative-06-bg-rules",
+      "cumulative_score": 13,
+      "newly_recovered_cases": [
+        "bg_custom_block",
+        "bg_custom_warn"
+      ],
+      "leave_one_out_condition": "remove-bg-rules",
+      "leave_one_out_score": 18,
+      "drop_from_full": 2,
+      "failed_without_feature": [
+        "bg_custom_block",
+        "bg_custom_warn"
+      ]
+    },
+    {
+      "feature": "cb_sequence",
+      "label": "CB · executable fallback sequence",
+      "cumulative_condition": "cumulative-07-cb-sequence",
+      "cumulative_score": 15,
+      "newly_recovered_cases": [
+        "cb_fallback_exhausts",
+        "cb_fallback_recovers"
+      ],
+      "leave_one_out_condition": "remove-cb-sequence",
+      "leave_one_out_score": 18,
+      "drop_from_full": 2,
+      "failed_without_feature": [
+        "cb_fallback_exhausts",
+        "cb_fallback_recovers"
+      ]
+    },
+    {
+      "feature": "consolidation",
+      "label": "HC→ATL/BG · approved consolidation",
+      "cumulative_condition": "cumulative-08-consolidation",
+      "cumulative_score": 18,
+      "newly_recovered_cases": [
+        "consolidation_preview",
+        "consolidation_to_rule",
+        "consolidation_to_semantic"
+      ],
+      "leave_one_out_condition": "remove-consolidation",
+      "leave_one_out_score": 17,
+      "drop_from_full": 3,
+      "failed_without_feature": [
+        "consolidation_preview",
+        "consolidation_to_rule",
+        "consolidation_to_semantic"
+      ]
+    },
+    {
+      "feature": "reconsolidation",
+      "label": "ATL update · provenance-preserving supersession",
+      "cumulative_condition": "cumulative-09-reconsolidation",
+      "cumulative_score": 19,
+      "newly_recovered_cases": [
+        "reconsolidation_supersedes"
+      ],
+      "leave_one_out_condition": "remove-reconsolidation",
+      "leave_one_out_score": 19,
+      "drop_from_full": 1,
+      "failed_without_feature": [
+        "reconsolidation_supersedes"
+      ]
+    },
+    {
+      "feature": "checkpoint",
+      "label": "Lifecycle · durable checkpoint",
+      "cumulative_condition": "cumulative-10-checkpoint",
+      "cumulative_score": 20,
+      "newly_recovered_cases": [
+        "checkpoint_persists"
+      ],
+      "leave_one_out_condition": "remove-checkpoint",
+      "leave_one_out_score": 19,
+      "drop_from_full": 1,
+      "failed_without_feature": [
+        "checkpoint_persists"
+      ]
+    }
+  ]
+}
