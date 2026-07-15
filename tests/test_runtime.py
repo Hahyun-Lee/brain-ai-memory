@@ -185,6 +185,16 @@ class RuntimeTest(unittest.TestCase):
     def test_tour_closes_the_failure_to_control_loop(self):
         tour = run_tour(self.runtime)
         self.assertIn("Thursday", tour["found"])
+        self.assertIn(
+            tour["found"],
+            {item["text"] for item in tour["evidence"]["context"]["memory"]["ATL"]},
+        )
+        self.assertTrue(
+            all(
+                "Friday" not in item["text"]
+                for item in tour["evidence"]["context"]["memory"]["ATL"]
+            )
+        )
         self.assertEqual(tour["exact_state"], "open_reviews = 3")
         self.assertIn("approval", tour["blocked"])
         self.assertEqual(tour["fallback"], "completed after 2 attempts")

@@ -1,37 +1,31 @@
 [English](README.md) | **한국어**
 
-# Brain-AI Memory — 장기 실행 에이전트를 위한 메모리 관리
+# Brain-AI Memory — 장기 실행 에이전트를 위한 범위가 분리된 지속 메모리
 
-> **검색은 text를 찾습니다. Memory management는 무엇을 유지하고, 갱신하고,
-> 다음 session에 전달할지 결정합니다.**
+[![CI](https://github.com/Hahyun-Lee/brain-ai-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/Hahyun-Lee/brain-ai-memory/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Hahyun-Lee/brain-ai-memory)](https://github.com/Hahyun-Lee/brain-ai-memory/releases/latest)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Brain-AI Memory는 여러 session에 걸쳐 작동하는 agent를 위한 설치 가능하고
-local·provider-neutral한 **typed operational memory reference kernel**입니다.
-Host가 선택한 record를 episodic event, semantic knowledge, procedural rule,
-exact state로 저장하고, stable entity와 source label에 연결하며, scoped recall,
-consolidation, supersession, lifecycle decision, handoff primitive를 제공합니다.
+> **장기 실행 AI 에이전트가 프로젝트별 기억을 분리하고, 바뀐 사실을 교체하고,
+> 정확한 상태를 보존하며, 다음 세션으로 결정을 넘길 수 있게 하는 로컬
+> 메모리입니다.**
 
-기존 model, RAG, vector store, tool, workflow engine은 그대로 사용하세요.
-Brain-AI Memory는 retrieval만으로 결정할 수 없는 것, 즉 record의 memory type,
-소속, 현재 active 여부, 다음에 어떤 형태가 되어야 하는지를 관리합니다.
+Brain-AI Memory는 여러 session에 걸쳐 작동하는 agent와 workflow를 위한
+local·MIT 라이선스 memory layer입니다. 선택한 record를 type·entity·source와
+명시적인 lifecycle state로 저장하고, host가 session 사이에 전달할 inspect 가능한
+checkpoint를 기록합니다. 기존 model, RAG, vector store, tool, workflow engine과
+함께 작동합니다.
 
-Optional **memory-to-action bridge**는 proposed action을 검사하고 host-supplied
-fallback sequence를 실행할 수 있습니다. 이 bridge는 managed memory를 소비하지만
-memory manager 자체는 아닙니다.
+**Local-first · API key 불필요 · hosted service 불필요 · 외부 database server
+불필요 · Python/CLI/MCP · MIT**
 
-**핵심 문제는 memory continuity입니다.** 모든 오래된 trace를 똑같이 현재로
-취급하지 않으면서 다음 session이 올바른 entity, 현재 knowledge, exact state,
-적용 가능한 procedure, source, 미해결 작업을 재구성할 수 있어야 합니다.
+**[1분 tour 실행](#약-1분-만에-local에서-실행하기)** ·
+**[MCP로 agent 연결](docs/07-mcp-server.ko.md)**
 
-> **Public alpha의 범위.** 이 package는 structured local store, entity-scoped
-> candidate recall bundle, 저장 entry의 lifecycle state, audit, checkpoint를
-> 담당합니다. Transcript 수집, 선택과 ingestion, token budget에 맞춘 model
-> context 구성, autonomous scheduling, 물리적 보존·삭제, production action
-> enforcement는 여전히 host가 담당합니다.
+## 약 1분 만에 local에서 실행하기
 
-## 1분 만에 managed lifecycle 확인하기
-
-API key, model call, database server, 외부 service가 필요하지 않습니다.
+이 tour에는 API key, model call, database server, 외부 service가 필요하지 않습니다.
 
 ```bash
 git clone https://github.com/Hahyun-Lee/brain-ai-memory.git
@@ -55,38 +49,41 @@ Brain-AI Memory · managed memory → optional control → durable handoff
 ```
 
 Memory-management 경로는 `BIND → RECALL/STATE → UPDATE → HANDOFF`입니다.
-Entity-scoped episode를 recall하고, stale knowledge를 supersede하고, exact state를
-보존하며, 다음 session을 위한 durable checkpoint를 만듭니다. `GUARD → FALLBACK`은
-optional memory-to-action bridge를 보여줍니다. 두 경로의 결과는 모두
-`./.brain-ai/`에서 확인할 수 있습니다.
+Entity-scoped current fact를 recall하고, stale knowledge를 supersede하고, exact
+state를 보존하며, host가 다음 session에 전달할 durable checkpoint를 기록합니다.
+`GUARD → FALLBACK`은 optional memory-to-action bridge를 보여줍니다. 두 경로의
+결과는 모두 `./.brain-ai/`에서 확인할 수 있습니다.
 
-## 누가 사용해야 하나?
+<p align="center">
+  <img src="docs/assets/graphical-abstract.png" width="920" alt="뒤섞인 session evidence에서 필요한 record를 선택해 episode, knowledge, relationship, procedure, exact-state memory로 분리하고 scoped context와 durable handoff로 전달하며, optional 하단 경로가 실행 전 proposed action을 검사하는 과정">
+</p>
 
-| 대상 | 적합성 |
+<p align="center">
+  뒤섞인 session trace → 범위가 명확하고 현재성 있는 memory → host가 소비할 inspect 가능한 handoff record.<br>
+  하단 경로는 optional memory-to-action bridge입니다.
+</p>
+
+## 적용하면 무엇이 달라지나?
+
+| 겪고 있는 failure | Brain-AI Memory가 추가하는 것 |
 |---|---|
-| agent·workflow·연구 도구 개발자 | **가장 핵심적인 사용자** — session 간 typed memory, entity scope, source trail, lifecycle, handoff가 필요할 때 |
-| 감사 가능한 local agent를 운영하는 팀 | **적합** — memory 변경과 source를 inspect해야 할 때. production hardening은 별도 필요 |
-| Codex·Claude Code 고급 사용자 | **적합** — recall, remember, consolidation, checkpoint 호출을 명시적으로 구성할 수 있을 때. built-in memory의 drop-in replacement는 아님 |
-| RAG·Obsidian·vector-store 사용자 | **적합** — retrieval은 되지만 scope, staleness, consolidation, session continuity가 해결되지 않을 때 |
-| 더 나은 일회성 대화를 원하는 일반 ChatGPT·Claude 사용자 | **직접 사용할 필요 없음** — 이 기술을 사용한 application을 통해 간접적으로 이용 |
-| one-shot agent 또는 단순 문서 검색 | **대체로 불필요** — 먼저 context나 RAG로 충분한지 확인 |
+| 두 project나 release의 memory가 서로 섞임 | stable entity binding과 entity-scoped recall |
+| retrieval이 관련 있지만 오래된 fact를 반환 | 선택한 old version을 inactive로 표시하고 source history를 보존하는 explicit supersession |
+| 이미 아는 값을 model이 추정 | prose 밖의 typed exact state |
+| 반복 경험이 session log에 묻힘 | knowledge나 rule로의 명시적 preview/apply 승격 |
+| 다음 session이 이전 결정을 모른 채 시작 | host-written summary, count, pending consolidation work를 담은 durable checkpoint |
 
-Lifecycle 없이 memory만 계속 커지거나, project identity가 섞이거나, stale
-fact가 active로 남거나, exact state가 prose 속에 묻히거나, 반복 episode가
-knowledge로 바뀌지 않거나, 다음 session이 이전 결정과 source를 복구하지 못할 때
-사용합니다. 이것은 agent를 설정하는 사람을 위한 infrastructure이지 일반
-소비자용 chat application이 아닙니다.
+**가장 적합한 사용자:** 여러 session에 걸친 coding·research·operations·assistant
+agent를 만드는 개발자, inspect 가능한 local memory가 필요한 팀, 그리고
+retrieval 이후에도 scope·staleness·exact state·handoff 문제가 남은 RAG 또는
+vector-store 사용자입니다. 일회성 chat이나 일반 문서 검색에는 context나 RAG만
+사용하는 편이 더 단순합니다.
 
-Codex/Claude의 session resume와 built-in memory도 유용합니다. 그것만으로
-문제가 해결된다면 교체하지 마세요. Brain-AI Memory는 operational memory를
-provider-neutral하고 typed·inspectable·source-labeled·lifecycle-managed한
-상태로 agent나 workflow 사이에 의도적으로 전달해야 하는 더 좁은 경우를 위한
-것입니다.
+**다음 단계:** [Codex·Claude Code·다른 MCP host에 연결](docs/07-mcp-server.ko.md)하거나
+[CLI·Python runtime](docs/05-runtime.ko.md)부터 사용하세요.
 
-![Graphical abstract: host가 뒤섞인 원시 session evidence에서 일부 record만 선택해 episode, knowledge, relationship, procedure, exact state compartment로 mapping하고 agent는 scoped context를 받으며, 별도의 아래쪽 경로에서는 proposed action만 gate를 거친 뒤 executable sequence가 tool에 도달하는 과정](docs/assets/graphical-abstract.png)
-
-**주 경로:** host-selected evidence → managed memory → scoped context.
-**Optional bridge:** proposed action → gate → executable sequence.
+**[적용 경로 선택](#적용-경로-선택하기)** ·
+**[근거 확인](#근거-현황)**
 
 ## 시스템이 관리하는 것
 
@@ -154,6 +151,12 @@ host integration은 scoped recall에 `brain_context`, 선택한 event나 exact s
 `brain_remember`, handoff에 `brain_checkpoint`를 호출합니다. 승격이 필요하면
 `brain-ai consolidate`를 별도로 preview하고 apply합니다. 이 호출들은
 background에서 자동 실행되지 않습니다.
+
+> **Integration 경계:** 현재 integration은 명시적으로 작동합니다. Host가
+> memory tool을 호출하고 반환된 context와 checkpoint를 다음 session에 전달하는
+> 방식을 결정합니다. Optional action bridge를 사용할 때는 host가 gate verdict를
+> 실제로 소비해야 합니다. 자동 transcript ingestion과 token-budgeted context
+> injection은 포함하지 않습니다.
 
 Public runtime은 provider의 native 대화 transcript를 자동 수집·보관하지 않으며,
 이 저장소에는 Claude Code JSONL이나 Codex rollout adapter가 포함되어 있지
@@ -378,6 +381,10 @@ lifecycle](docs/02-memory-lifecycle.ko.md)을 참고하세요.
 Brain-AI Memory는 운영 노출, primary memory-management evaluation, supporting
 software conformance, 아직 없는 evidence라는 네 가지 근거 계층을 구분합니다.
 이들은 서로 다른 질문에 답하며 하나의 headline으로 합치면 안 됩니다.
+
+아래 운영 수치는 이 repository를 clean-room 방식으로 추출한 private source
+implementation의 근거입니다. Tour, test, ablation 결과는 public package 자체의
+근거입니다.
 
 | 질문 | 현재 근거 |
 |---|---|

@@ -239,7 +239,7 @@ def run_tour(runtime: BrainAIRuntime) -> dict:
         )
 
     prepared = runtime.process(
-        "What changed recently, and how many open reviews remain?",
+        "What is the Atlas 2.1 release day, and how many open reviews remain?",
         proposed_action="deploy production",
         entity=release["id"],
     )
@@ -251,11 +251,15 @@ def run_tour(runtime: BrainAIRuntime) -> dict:
         ],
         entity=release["id"],
     )
-    checkpoint = runtime.checkpoint("five-minute tour completed")
+    checkpoint = runtime.checkpoint("local tour completed")
     state = next(
         item for item in prepared["memory"].get("IPS", []) if item["key"] == "open_reviews"
     )
-    active_fact = runtime.store.get_knowledge(updated["new_id"])
+    active_fact = next(
+        item
+        for item in prepared["memory"].get("ATL", [])
+        if item["id"] == updated["new_id"]
+    )
     return {
         "entity": f"{release['name']} → belongs_to → {project['name']}",
         "found": active_fact["text"],

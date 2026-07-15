@@ -1,38 +1,30 @@
 **English** | [한국어](README.ko.md)
 
-# Brain-AI Memory — Memory Management for Long-Running Agents
+# Brain-AI Memory — Durable, Scoped Memory for Long-Running Agents
 
-> **Retrieval finds text. Memory management decides what stays, changes, and
-> reaches the next session.**
+[![CI](https://github.com/Hahyun-Lee/brain-ai-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/Hahyun-Lee/brain-ai-memory/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Hahyun-Lee/brain-ai-memory)](https://github.com/Hahyun-Lee/brain-ai-memory/releases/latest)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Brain-AI Memory is an installable, local, provider-neutral **reference kernel
-for typed operational memory** in agents that work across sessions. It stores
-host-selected records as episodic events, semantic knowledge, procedural rules,
-and exact state; binds them to stable entities and source labels; and provides
-scoped recall, consolidation, supersession, lifecycle decisions, and handoff
-primitives.
+> **Keep long-running agents from mixing projects, reviving stale facts,
+> guessing known state, or losing the handoff between sessions.**
 
-Keep your model, RAG, vector store, tools, and workflow engine. Brain-AI Memory
-manages what retrieval alone does not: what kind of memory a record is, what it
-belongs to, whether it is still active, and what it should become next.
+Brain-AI Memory is a local, MIT-licensed memory layer for agents and workflows
+that operate across sessions. It stores typed, entity-scoped records with
+sources and explicit lifecycle state, then writes inspectable checkpoints for
+a host to carry across sessions. It works beside your existing model, RAG,
+vector store, tools, and workflow engine.
 
-An optional **memory-to-action bridge** can check proposed actions and run a
-host-supplied fallback sequence. That bridge consumes managed memory; it is not
-the memory manager itself.
+**Local-first · No API key · No hosted service · No external database server ·
+Python/CLI/MCP · MIT**
 
-**The core problem is memory continuity:** can the next session reconstruct the
-right entity, current knowledge, exact state, applicable procedure, source,
-and unresolved work without treating every old trace as equally current?
+**[Run the 1-minute tour](#try-it-locally-in-about-a-minute)** ·
+**[Connect an agent over MCP](docs/07-mcp-server.md)**
 
-> **Scope of the public alpha.** This package owns structured local stores,
-> entity-scoped candidate recall bundles, stored-entry lifecycle state, audit,
-> and checkpoints. The host still owns transcript capture, selection and
-> ingestion, token-budgeted model context, autonomous scheduling, physical
-> retention/deletion, and production action enforcement.
+## Try it locally in about a minute
 
-## See the managed lifecycle in one minute
-
-No API key, model call, database server, or external service is required.
+The tour requires no API key, model call, database server, or external service.
 
 ```bash
 git clone https://github.com/Hahyun-Lee/brain-ai-memory.git
@@ -56,38 +48,42 @@ Brain-AI Memory · managed memory → optional control → durable handoff
 ```
 
 The memory-management path is `BIND → RECALL/STATE → UPDATE → HANDOFF`: an
-entity-scoped episode is recalled, stale knowledge is superseded, exact state
-is preserved, and the next session gets a durable checkpoint. `GUARD →
-FALLBACK` demonstrates the optional memory-to-action bridge. The tour makes
-both paths inspectable under `./.brain-ai/`.
+entity-scoped current fact is recalled, stale knowledge is superseded, exact
+state is preserved, and a durable checkpoint is written for the host to pass
+to the next session. `GUARD → FALLBACK` demonstrates the optional
+memory-to-action bridge. The tour makes both paths inspectable under
+`./.brain-ai/`.
 
-## Who should use this?
+<p align="center">
+  <img src="docs/assets/graphical-abstract.png" width="920" alt="Scattered session evidence is selected into separate episode, knowledge, relationship, procedure, and exact-state memory compartments, then delivered as scoped context and a durable handoff; an optional lower lane checks proposed actions before execution.">
+</p>
 
-| Audience | Fit |
+<p align="center">
+  Scattered session traces → scoped, current memory → an inspectable handoff record for the host to consume.<br>
+  The lower lane is an optional memory-to-action bridge.
+</p>
+
+## What changes when you add it?
+
+| Failure you see | What Brain-AI Memory adds |
 |---|---|
-| agent, workflow, or research-tool builders | **Yes—the primary audience**, when they need typed memory, entity scope, source trails, lifecycle, and handoff across sessions |
-| teams operating auditable local agents | **Yes**, when memory changes and sources must remain inspectable; production hardening is still required |
-| Codex or Claude Code power users | **Yes**, when they can configure explicit recall, remember, consolidation, and checkpoint calls; this is not a drop-in replacement for built-in memory |
-| RAG, Obsidian, or vector-store users | **Yes**, when retrieval works but scope, staleness, consolidation, or session continuity does not |
-| ordinary ChatGPT/Claude users seeking a better one-off chat | **No direct need**; they may benefit indirectly from an application built with it |
-| one-shot agents or ordinary document search | **Usually no**; use context or RAG first |
+| two projects or releases leak into each other | stable entity bindings and entity-scoped recall |
+| retrieval returns a relevant but outdated fact | explicit supersession that marks the selected old version inactive while preserving its source history |
+| the model estimates a value that is already known | typed exact state outside prose |
+| repeated experience remains buried in session logs | explicit preview/apply promotion into knowledge or a rule |
+| the next session starts without the prior decision | a durable checkpoint with a host-written summary, counts, and pending consolidation work |
 
-Use it when memory keeps growing without a lifecycle, project identities mix,
-stale facts remain active, exact state is buried in prose, reusable episodes
-never become knowledge, or the next session cannot recover the previous
-decision and its source. It is infrastructure for people who configure agents,
-not a consumer chat application.
+**Best fit:** developers building multi-session coding, research, operations,
+or assistant agents; teams that need inspectable local memory; and RAG or
+vector-store users whose remaining problem is scope, staleness, exact state, or
+handoff. For one-off chat or ordinary document search, context or RAG alone is
+usually simpler.
 
-Codex/Claude session resume and built-in memory remain useful. Do not replace
-them if they already solve your problem. Brain-AI Memory is for the narrower
-case where operational memory must be provider-neutral, typed, inspectable,
-source-labeled, lifecycle-managed, and deliberately carried across agents or
-workflows.
+**Next:** [connect Codex, Claude Code, or another MCP host](docs/07-mcp-server.md),
+or start with the [CLI and Python runtime](docs/05-runtime.md).
 
-![Graphical abstract: a host selects a few records from raw session evidence and maps them into separate episode, knowledge, relationship, procedure, and exact-state compartments; the agent receives scoped context, while a separate lower lane checks only a proposed action before an executable sequence can reach a tool](docs/assets/graphical-abstract.png)
-
-**Primary path:** host-selected evidence → managed memory → scoped context.
-**Optional bridge:** proposed action → gate → executable sequence.
+**[Choose an adoption path](#choose-your-adoption-path)** ·
+**[Inspect the evidence](#evidence-status)**
 
 ## What the system manages
 
@@ -155,6 +151,12 @@ host integration calls `brain_context` for scoped recall, `brain_remember` for
 selected events or exact state, and `brain_checkpoint` for a handoff. If
 promotion is wanted, it separately previews and applies `brain-ai consolidate`;
 none of these calls happens in the background.
+
+> **Integration boundary:** integration is explicit today. The host calls the
+> memory tools and decides how returned context and checkpoints reach the next
+> session. When using the optional action bridge, the host must consume its
+> gate verdict. Automatic transcript ingestion and token-budgeted context
+> injection are not included.
 
 The public runtime does not scrape or archive a provider's native chat
 transcript, and this repository includes no Claude Code JSONL or Codex rollout
@@ -388,6 +390,10 @@ Brain-AI Memory separates four evidence classes: operational exposure, primary
 memory-management evaluation, supporting software conformance, and evidence
 that is still missing. They answer different questions and should not be
 collapsed into one headline.
+
+Operational metrics below describe the private source implementation from
+which this repository was clean-room extracted. Tour, test, and ablation
+results describe the public package itself.
 
 | Question | Current evidence |
 |---|---|
