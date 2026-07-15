@@ -1,7 +1,7 @@
 # 설치 가능한 reference runtime
 
 공개 저장소에는 이제 component contract를 실제로 실행하는 local-first reference
-implementation이 포함됩니다. 작고 provider-neutral하며 외부 dependency가 없습니다.
+implementation이 포함됩니다. 작고 provider-neutral하게 유지합니다.
 실제로 사용할 수 있는 코드지만 hosted multi-tenant service가 아니라 alpha
 reference입니다.
 
@@ -12,8 +12,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install .
 
-brain-ai init
-brain-ai demo
+brain-ai tour
 brain-ai status
 ```
 
@@ -23,7 +22,7 @@ brain-ai status
 |---|---|
 | `config.json` | adapter와 observer 설정 |
 | `events.jsonl` | append-only episodic memory(HC) |
-| `state.sqlite3` | semantic memory, rule, numerical state, lifecycle record |
+| `state.sqlite3` | entity, relation, semantic memory, rule, exact state, lifecycle record |
 | `audit.jsonl` | PFC routing, gate, harness, lifecycle trace |
 | `checkpoints.jsonl` | 명시적 session checkpoint |
 
@@ -34,21 +33,31 @@ brain-ai status
 각 failure mode를 소유하는 store에 기록합니다.
 
 ```bash
-brain-ai remember --type episodic --text "배포일이 목요일로 변경됐다" --promote semantic
-brain-ai remember --type semantic --text "운영 배포 전에는 review가 필요하다"
-brain-ai remember --type state --key open_reviews --value 3
-brain-ai remember --type rule --pattern 'deploy\s+production' --text "승인 필요"
+brain-ai entity add --name Atlas --type project --alias A
+brain-ai entity add --name "Atlas 2.1" --type release
+brain-ai relation add "Atlas 2.1" belongs_to Atlas
+brain-ai remember --type episodic --entity "Atlas 2.1" \
+  --text "배포일이 목요일로 변경됐다" --promote semantic
+brain-ai remember --type semantic --entity "Atlas 2.1" \
+  --text "운영 배포 전에는 review가 필요하다"
+brain-ai remember --type state --entity "Atlas 2.1" --key open_reviews --value 3
+brain-ai remember --type rule --entity "Atlas 2.1" \
+  --pattern 'deploy\s+production' --text "승인 필요"
 ```
 
 모델이나 agent client가 사용할 audit 가능한 context bundle을 만듭니다.
 
 ```bash
-brain-ai run "최근 변경과 남은 review 개수는?" --action "deploy production"
+brain-ai run "최근 변경과 남은 review 개수는?" \
+  --entity "Atlas 2.1" --action "deploy production"
 ```
 
 출력에는 선택한 component, 검색 record, gate decision, latency가 포함됩니다.
 숨겨진 model call은 없습니다. 이 JSON을 Claude, Codex, OpenAI, local model 또는
 결정론적 worker에 전달할 수 있습니다.
+Entity scope는 이름이 같은 다른 project의 state나 rule이 bundle에 섞이는 것을
+막습니다. `brain-ai ontology`는 시작할 때 load한 component/channel schema를
+검증하고 보여줍니다.
 
 TH/BG gate를 거쳐 CB harness로 명시적 command를 실행합니다.
 
@@ -99,6 +108,7 @@ runtime = BrainAIRuntime(".brain-ai")
 bundle = runtime.process(
     "최근 배포 계획에서 무엇이 바뀌었나?",
     proposed_action="deploy production",
+    entity="Atlas 2.1",
 )
 if bundle["gate"]["allowed"]:
     context_for_your_executor = bundle["memory"]
@@ -116,3 +126,5 @@ step, checkpoint, audit trail에 존재합니다.
   명시적 regex와 사람의 apply가 필요합니다.
 - production에는 별도의 access control, encryption, backup, concurrency policy,
   model client, 조직별 hook이 필요합니다.
+- MCP server는 optional install(`pip install ".[mcp]"`)입니다. [한국어 MCP
+  guide](07-mcp-server.ko.md)를 참고하세요.

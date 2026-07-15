@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .adapters import build_semantic_adapter
 from .config import load_config, resolve_home
+from .ontology import load_ontology
 from .storage import MemoryStore, new_id, utc_now
 from .text import tokenize
 
@@ -32,6 +33,7 @@ class BrainAIRuntime:
         self.store = MemoryStore(self.home)
         self.store.initialize()
         self.config = load_config(self.home)
+        self.ontology, self.ontology_summary = load_ontology()
         self.semantic = build_semantic_adapter(self.store, self.config)
 
     def route(self, query: str, proposed_action: str | None = None) -> list[str]:
@@ -47,7 +49,7 @@ class BrainAIRuntime:
         components.extend(["ATL", "HC"])
         return list(dict.fromkeys(components))
 
-    def gate(self, action: str | None) -> dict:
+    def gate(self, action: str | None, *, entity: str | None = None) -> dict:
         if not action:
             return {"allowed": True, "effect": "allow", "reason": "no proposed action", "rule_id": None}
         warnings = []
@@ -56,7 +58,11 @@ class BrainAIRuntime:
                 if effect == "block":
                     return {"allowed": False, "effect": effect, "reason": reason, "rule_id": "builtin"}
                 warnings.append(reason)
+        entity_id = self.store.get_entity(entity)["id"] if entity else None
         for rule in self.store.rules():
+            if rule.get("entity_ids"):
+                if not entity_id or entity_id not in rule["entity_ids"]:
+                    continue
             if re.search(rule["pattern"], action):
                 if rule["effect"] == "block":
                     return {"allowed": False, "effect": "block", "reason": rule["reason"], "rule_id": rule["id"]}
@@ -68,37 +74,86 @@ class BrainAIRuntime:
             "rule_id": None,
         }
 
-    def recall(self, query: str, *, limit: int | None = None, proposed_action: str | None = None) -> dict:
+    def recall(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        proposed_action: str | None = None,
+        entity: str | None = None,
+    ) -> dict:
         limit = limit or int(self.config.get("runtime", {}).get("recall_limit", 5))
+        if limit < 1:
+            raise ValueError("recall limit must be positive")
         route = self.route(query, proposed_action)
+        entity_record = self.store.get_entity(entity) if entity else None
+        entity_id = entity_record["id"] if entity_record else None
         by_component: dict[str, list[dict]] = {}
         if "ATL" in route:
-            by_component["ATL"] = self.semantic.search(query, limit)
+            semantic_results = self.semantic.search(query, limit)
+            if entity_id:
+                semantic_results = [
+                    result
+                    for result in semantic_results
+                    if "entity_ids" in result
+                    and (
+                        not result["entity_ids"]
+                        or entity_id in result["entity_ids"]
+                    )
+                ]
+            by_component["ATL"] = semantic_results
         if "HC" in route:
-            by_component["HC"] = self.store.search_events(query, limit)
+            by_component["HC"] = self.store.search_events(query, limit, entity_id=entity_id)
         if "IPS" in route:
-            by_component["IPS"] = self.store.search_states(query, limit)
+            by_component["IPS"] = self.store.search_states(query, limit, entity=entity_id)
         if "BG" in route:
             query_terms = set(tokenize(f"{query} {proposed_action or ''}"))
             rules = []
             for rule in self.store.rules():
+                if rule.get("entity_ids"):
+                    if not entity_id or entity_id not in rule["entity_ids"]:
+                        continue
                 rule_terms = set(tokenize(f"{rule['pattern']} {rule['reason']}"))
                 if query_terms & rule_terms or (proposed_action and re.search(rule["pattern"], proposed_action)):
                     rules.append({**rule, "component": "BG", "kind": "procedural-rule"})
             by_component["BG"] = rules[:limit]
-        return {"query": query, "route": route, "by_component": by_component}
+        entity_context = None
+        if entity_record:
+            entity_context = {
+                **entity_record,
+                "relations": self.store.relations(entity_record["id"]),
+            }
+        return {
+            "query": query,
+            "route": route,
+            "entity": entity_context,
+            "by_component": by_component,
+        }
 
-    def process(self, query: str, *, proposed_action: str | None = None, limit: int | None = None) -> dict:
+    def process(
+        self,
+        query: str,
+        *,
+        proposed_action: str | None = None,
+        limit: int | None = None,
+        entity: str | None = None,
+    ) -> dict:
         started = time.perf_counter()
         run_id = new_id("run")
-        gate = self.gate(proposed_action)
-        recall = self.recall(query, limit=limit, proposed_action=proposed_action)
+        gate = self.gate(proposed_action, entity=entity)
+        recall = self.recall(
+            query,
+            limit=limit,
+            proposed_action=proposed_action,
+            entity=entity,
+        )
         result = {
             "run_id": run_id,
             "status": "ready" if gate["allowed"] else "blocked",
             "query": query,
             "proposed_action": proposed_action,
             "route": recall["route"],
+            "entity": recall["entity"],
             "gate": gate,
             "memory": recall["by_component"],
             "latency_ms": round((time.perf_counter() - started) * 1000, 3),
@@ -200,7 +255,10 @@ class BrainAIRuntime:
             if apply:
                 if target == "semantic":
                     created = self.store.put_knowledge(
-                        event["text"], source=f"consolidated:{event['id']}", tags=event.get("tags", [])
+                        event["text"],
+                        source=f"consolidated:{event['id']}",
+                        tags=event.get("tags", []),
+                        entities=event.get("entity_ids", []),
                     )
                     operation = "migrate-to-knowledge-base"
                 else:
@@ -210,7 +268,10 @@ class BrainAIRuntime:
                         candidates.append(candidate)
                         continue
                     created = self.store.add_rule(
-                        pattern, reason=event["text"], source=f"consolidated:{event['id']}"
+                        pattern,
+                        reason=event["text"],
+                        source=f"consolidated:{event['id']}",
+                        entities=event.get("entity_ids", []),
                     )
                     operation = "migrate-to-rules"
                 self.store.record_lifecycle("episodic", event["id"], operation, "approved consolidation")
@@ -232,7 +293,11 @@ class BrainAIRuntime:
     ) -> dict:
         old = self.store.get_knowledge(old_id)
         created = self.store.put_knowledge(
-            new_text, source=source, tags=tags or old.get("tags", []), supersedes=old_id
+            new_text,
+            source=source,
+            tags=tags or old.get("tags", []),
+            supersedes=old_id,
+            entities=old.get("entity_ids", []),
         )
         result = {
             "old_id": old_id,
@@ -247,8 +312,9 @@ class BrainAIRuntime:
         semantic_config = self.config.get("semantic", {})
         return {
             "home": str(self.home),
-            "version": "0.2.0",
+            "version": "0.3.0",
             "counts": self.store.counts(),
             "semantic_backend": semantic_config.get("backend", "local"),
+            "ontology": self.ontology_summary,
             "latest_checkpoint": (self.store.checkpoints(1) or [None])[-1],
         }

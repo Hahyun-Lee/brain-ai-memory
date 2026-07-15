@@ -4,28 +4,48 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brain-ai-memory"
-version = "0.2.0"
-description = "Installable lifecycle and control runtime for long-running AI-agent memory"
+version = "0.3.0"
+description = "Local control layer that turns retrieved memory into reliable agent action"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 authors = [{name = "Hahyun Lee"}]
-keywords = ["ai-agents", "memory", "rag", "llm", "agent-runtime"]
+keywords = [
+  "ai-agents",
+  "agent-memory",
+  "mcp",
+  "codex",
+  "claude-code",
+  "rag",
+  "llm",
+  "agent-runtime",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
 ]
-dependencies = []
+dependencies = ["PyYAML>=6.0,<7"]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.2.0,<2"]
+
+[project.urls]
+Homepage = "https://github.com/Hahyun-Lee/brain-ai-memory"
+Documentation = "https://github.com/Hahyun-Lee/brain-ai-memory#readme"
+Issues = "https://github.com/Hahyun-Lee/brain-ai-memory/issues"
 
 [project.scripts]
 brain-ai = "brain_ai_memory.cli:main"
+brain-ai-mcp = "brain_ai_memory.mcp_server:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.data-files]
+"share/brain-ai-memory/schema" = ["schema/brain_components.yaml"]

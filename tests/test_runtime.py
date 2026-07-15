@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import sys
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from brain_ai_memory.adapters import SmartConnectionsAdapter, VaultBM25Adapter
+from brain_ai_memory.cli import run_tour
 from brain_ai_memory.runtime import BrainAIRuntime
 
 
@@ -84,6 +87,125 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(active[0]["text"], "Release day is Thursday")
         self.assertEqual(active[0]["supersedes"], old["id"])
 
+    def test_entity_relations_scope_memory_rules_and_exact_state(self):
+        atlas = self.runtime.store.put_entity("Atlas", entity_type="project", aliases=["A"])
+        atlas = self.runtime.store.put_entity("Atlas", entity_type="project", aliases=["Project Atlas"])
+        boreal = self.runtime.store.put_entity("Boreal", entity_type="project")
+        release = self.runtime.store.put_entity("Atlas 2.1", entity_type="release")
+        relation = self.runtime.store.add_relation(release["id"], "belongs_to", atlas["id"])
+        self.runtime.store.put_knowledge(
+            "Atlas deploys on Thursday", source="test", entities=[atlas["id"]]
+        )
+        self.runtime.store.put_knowledge(
+            "Boreal deploys on Monday", source="test", entities=[boreal["id"]]
+        )
+        self.runtime.store.set_state("open_reviews", 3, entity=atlas["id"])
+        self.runtime.store.set_state("open_reviews", 7, entity=boreal["id"])
+        self.runtime.store.set_state("open_reviews", 99)
+        self.runtime.store.add_rule(
+            r"deploy\s+production",
+            reason="Atlas approval required",
+            entities=[atlas["id"]],
+        )
+
+        atlas_result = self.runtime.process(
+            "How many open reviews before deploy?",
+            proposed_action="deploy production",
+            entity="A",
+        )
+        boreal_result = self.runtime.process(
+            "How many open reviews before deploy?",
+            proposed_action="deploy production",
+            entity=boreal["id"],
+        )
+
+        self.assertEqual(relation["predicate"], "belongs_to")
+        self.assertEqual(atlas["aliases"], ["A", "Project Atlas"])
+        self.assertEqual(atlas_result["entity"]["id"], atlas["id"])
+        self.assertEqual(atlas_result["memory"]["IPS"][0]["value"], 3)
+        self.assertEqual(atlas_result["status"], "blocked")
+        self.assertEqual(boreal_result["memory"]["IPS"][0]["value"], 7)
+        self.assertEqual(boreal_result["status"], "ready")
+        self.assertTrue(
+            all("Boreal" not in item["text"] for item in atlas_result["memory"]["ATL"])
+        )
+
+    def test_ontology_is_loaded_and_validated_at_startup(self):
+        summary = self.runtime.ontology_summary
+        self.assertEqual(summary["component_count"], 7)
+        self.assertEqual(summary["channel_count"], 2)
+        self.assertIn("PFC", summary["component_ids"])
+        self.assertIn("consolidation", summary["channel_ids"])
+
+    def test_tour_closes_the_failure_to_control_loop(self):
+        tour = run_tour(self.runtime)
+        self.assertIn("Thursday", tour["found"])
+        self.assertEqual(tour["exact_state"], "open_reviews = 3")
+        self.assertIn("approval", tour["blocked"])
+        self.assertEqual(tour["fallback"], "completed after 2 attempts")
+        self.assertIn("superseded", tour["updated"])
+
+
+class MCPServerTest(unittest.TestCase):
+    def test_mcp_surface_has_control_tools_but_no_arbitrary_exec(self):
+        try:
+            from brain_ai_memory.mcp_server import create_mcp_server
+            import mcp  # noqa: F401
+        except ImportError:
+            self.skipTest("optional MCP dependency is not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            server = create_mcp_server(Path(tmp) / ".brain-ai")
+            names = {tool.name for tool in server._tool_manager.list_tools()}
+            self.assertIn("brain_context", names)
+            self.assertIn("brain_check_action", names)
+            self.assertIn("brain_checkpoint", names)
+            self.assertNotIn("execute", " ".join(names))
+            resources = {str(resource.uri) for resource in server._resource_manager.list_resources()}
+            self.assertEqual(resources, {"brain-ai://status", "brain-ai://ontology"})
+
+    def test_mcp_stdio_round_trip(self):
+        try:
+            from mcp import ClientSession, StdioServerParameters
+            from mcp.client.stdio import stdio_client
+        except ImportError:
+            self.skipTest("optional MCP dependency is not installed")
+
+        async def exercise(home: Path):
+            params = StdioServerParameters(
+                command=sys.executable,
+                args=[
+                    "-m",
+                    "brain_ai_memory.mcp_server",
+                    "--home",
+                    str(home),
+                ],
+                env=dict(os.environ),
+            )
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    tools = await session.list_tools()
+                    names = {tool.name for tool in tools.tools}
+                    self.assertIn("brain_context", names)
+                    created = await session.call_tool(
+                        "brain_upsert_entity",
+                        {"name": "Atlas", "entity_type": "project"},
+                    )
+                    self.assertFalse(created.isError)
+                    context = await session.call_tool(
+                        "brain_context",
+                        {"query": "What changed?", "entity": "Atlas"},
+                    )
+                    self.assertFalse(context.isError)
+                    resources = await session.list_resources()
+                    self.assertEqual(
+                        {str(resource.uri) for resource in resources.resources},
+                        {"brain-ai://status", "brain-ai://ontology"},
+                    )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            asyncio.run(exercise(Path(tmp) / ".brain-ai"))
+
 
 class AdapterTest(unittest.TestCase):
     def test_vault_fallback_covers_unindexed_korean_markdown(self):
@@ -121,6 +243,38 @@ for line in sys.stdin:
             self.assertIn("vault-bm25", backends)
             self.assertEqual(adapter.last_diagnostic["mcp"], "ok")
             self.assertEqual(adapter.last_diagnostic["fusion"], "reciprocal-rank")
+
+    def test_smart_connections_v2_envelope_preserves_server_hybrid_ranking(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault = root / "vault"
+            vault.mkdir()
+            (vault / "Hybrid.md").write_text(
+                "full private note text that should not replace the bounded server snippet",
+                encoding="utf-8",
+            )
+            server = root / "fake_mcp_v2.py"
+            server.write_text(
+                """import json, sys
+for line in sys.stdin:
+    msg=json.loads(line)
+    if 'id' not in msg: continue
+    if msg['method']=='initialize': result={'protocolVersion':'2024-11-05','capabilities':{},'serverInfo':{'name':'fake-v2','version':'2'}}
+    else: result={'content':[{'type':'text','text':json.dumps({'mode':'semantic','profile':'adaptive','results':[{'path':'Hybrid.md','vault':'vault','similarity':0.91,'scope':'note','snippet':'bounded hybrid snippet','retrieval':['plugin-dense','bm25'],'scoreType':'rrf'}]})}]}
+    print(json.dumps({'jsonrpc':'2.0','id':msg['id'],'result':result}), flush=True)
+""",
+                encoding="utf-8",
+            )
+            adapter = SmartConnectionsAdapter(vault, [sys.executable, str(server)], timeout=3, merge_local=True)
+            results = adapter.search("hybrid retrieval", limit=5)
+            self.assertEqual(results[0]["path"], "Hybrid.md")
+            self.assertEqual(results[0]["text"], "bounded hybrid snippet")
+            self.assertEqual(results[0]["retrieval"], ["plugin-dense", "bm25"])
+            self.assertAlmostEqual(results[0]["score"], 0.91)
+            self.assertEqual(adapter.last_diagnostic["mcp_profile"], "adaptive")
+            self.assertTrue(adapter.last_diagnostic["server_hybrid"])
+            self.assertEqual(adapter.last_diagnostic["fallback_hits"], 0)
+            self.assertEqual(adapter.last_diagnostic["fusion"], "server-ranked")
 
 
 if __name__ == "__main__":

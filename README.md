@@ -2,41 +2,23 @@
 
 # Brain-AI Memory
 
-> **A local-first memory and control runtime for agents that must remember the
-> right context, enforce rules, preserve exact state, and finish procedures
-> across sessions.**
+> **Your agent found the right memory. It still did the wrong thing.**
 
-**Available now:** installable public alpha (`v0.2`). The local demo needs no API
-key, model call, database server, or external service.
+Brain-AI Memory is a local control layer for agents that work across sessions.
+It separates **events, knowledge, rules, exact state, and executable
+procedures**, then binds them to stable entities, checks actions, completes
+fallbacks, and updates stale memory.
 
-Human memory and control rely on partly distinct but interacting functions.
-Brain-AI Memory borrows that **functional separation—not literal brain anatomy**
-and translates it into inspectable software contracts: stores, routing,
-deterministic guards, executable fallback sequences, and lifecycle operations.
+It is not another vector database. Keep your model, RAG, tools, and workflow
+engine; use Brain-AI Memory where retrieval alone stops being enough.
 
-![Graphical abstract: a confused agent's mixed history passes through an input gate into a brain-inspired software runtime with separate event, knowledge, rule, exact-state, and executable-sequence roles; a lifecycle loop versions and archives memory before the same agent receives a compact approved context bundle](docs/assets/graphical-abstract.png)
+**The core problem is behavioral continuity, not storage capacity:** does the
+next session use the right entity, current fact, exact value, applicable rule,
+and complete procedure—and then leave memory in a better state?
 
-| Brain-inspired principle | AI implementation | Observable outcome |
-|---|---|---|
-| separate events, knowledge, actions, and quantities | episodic/semantic stores, exact state, traced routing | a failure can be traced to the subsystem that owned it instead of being called “retrieval” |
-| gate actions and coordinate learned sequences | deterministic guards and executable fallbacks | disallowed actions are blocked; registered fallback paths continue to success or exhaustion |
-| update memory when reuse reveals change or conflict | approved consolidation, conflict-triggered reconsolidation, and seven lifecycle operations | memories can be promoted, superseded with provenance, compacted, archived, or forgotten |
+## See the problem and the fix in one minute
 
-*The brain-region labels are functional mnemonics, not claims that one
-anatomical region alone performs each function.* The runtime sits around your
-model, retriever, and workflow engine; it does not replace them. See the
-[neuroscience-to-software mapping and its limits](docs/01-the-mapping.md).
-
-> **Evidence boundary.** The public runtime shows that these contracts can be
-> installed and executed, and the operational record shows sustained use.
-> Retrieval tests and contract comparisons measure only their named targets.
-> They do not by themselves prove that the brain-inspired mapping improves
-> end-to-end LLM accuracy over simpler memory. [Evidence and
-> limitations](#evidence-status)
-
-## Install and run the whole local loop
-
-No API key, model call, database server, or external service is required:
+No API key, model call, database server, or external service is required.
 
 ```bash
 git clone https://github.com/Hahyun-Lee/brain-ai-memory.git
@@ -45,30 +27,119 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install .
 
-brain-ai init
-brain-ai demo
-brain-ai status
+brain-ai tour
 ```
 
-The demo writes episodic and semantic memories, exact numerical state, and a
-procedural rule. It then routes one query across the relevant components,
-applies the action gate, records an audit trace, and creates a checkpoint. All
-state stays in `./.brain-ai/`.
+```text
+Brain-AI Memory · failure → controlled outcome
+1  BIND     Atlas 2.1 → belongs_to → Atlas
+2  RECALL   Atlas 2.1 release day is Thursday.
+3  STATE    open_reviews = 3
+4  GUARD    blocked — release approval is required before production deployment
+5  FALLBACK completed after 2 attempts
+6  UPDATE   old fact → superseded by → new fact
+✓  HANDOFF  checkpoint created
+```
 
-Run your own end-to-end path:
+The ordinary retriever in this scenario can find release notes. That is not the
+whole job: the agent must use the newest fact, read rather than guess an exact
+count, obey the release rule, finish a registered fallback, and leave correct
+state for the next session. The tour makes each outcome inspectable under
+`./.brain-ai/`.
+
+## Who should use this?
+
+| Audience | Fit |
+|---|---|
+| Codex or Claude Code power users | **Yes**, when work repeats across sessions or projects and needs durable state, rules, and handoffs |
+| agent, workflow, or research-tool builders | **Yes—the primary audience**, because they can wire context, gates, execution, and lifecycle into the host loop |
+| teams operating auditable local agents | **Yes**, as an inspectable control layer; production hardening is still required |
+| ordinary ChatGPT/Claude users seeking a better one-off chat | **No direct need**; they may benefit indirectly from an application built with it |
+| one-shot agents or ordinary document search | **Usually no**; use context or RAG first |
+
+Use it when at least one failure keeps recurring: stale facts are reused,
+project identities get mixed, exact values are guessed, written rules are
+ignored, fallback steps stop early, or nobody knows what memory to update or
+archive. It is infrastructure for people who configure agents, not a consumer
+chat application.
+
+Codex/Claude session resume and built-in memory remain useful. Do not replace
+them if they already solve your problem. Brain-AI Memory is for the narrower
+case where operational state must be provider-neutral, typed, inspectable,
+action-aware, and deliberately updated across agents or workflows.
+
+![Graphical abstract: a confused agent's mixed history passes through an input gate into a brain-inspired software runtime with separate event, knowledge, rule, exact-state, and executable-sequence roles; a lifecycle loop versions and archives memory before the same agent receives a compact approved context bundle](docs/assets/graphical-abstract.png)
+
+## Connect it to an agent
+
+Install the optional MCP surface:
 
 ```bash
-brain-ai remember --type episodic --text "The release moved to Thursday" --promote semantic
-brain-ai remember --type state --key open_reviews --value 3
-brain-ai run "What changed recently and how many reviews remain?"
-brain-ai consolidate          # preview
-brain-ai consolidate --apply  # explicit promotion
-brain-ai serve                # http://127.0.0.1:8765
+python -m pip install ".[mcp]"
+brain-ai-mcp --home /absolute/path/to/.brain-ai
 ```
 
-See the [runtime guide](docs/05-runtime.md), [adapter and observer
-guide](docs/06-adapters-and-observer.md), or the two original
-[single-component examples](examples/README.md).
+Add the server to any MCP client using the equivalent of:
+
+```json
+{
+  "mcpServers": {
+    "brain-ai-memory": {
+      "command": "brain-ai-mcp",
+      "args": ["--home", "/absolute/path/to/.brain-ai"]
+    }
+  }
+}
+```
+
+Codex CLI/desktop/IDE and Claude Code support local MCP servers. Before an
+action, the agent calls `brain_context` or `brain_check_action`.
+After work, it records events or exact state and creates a checkpoint. The MCP
+surface intentionally does **not** expose arbitrary shell execution; approved
+actions stay in your host agent or workflow engine.
+
+**Connection is not enforcement.** MCP makes these tools available, but the
+host must treat `gate.allowed = false` as a stop condition. For deterministic
+blocking, route execution through `brain-ai harness` or wire the verdict into a
+host pre-action hook. Otherwise the MCP gate remains advisory. See the [Codex
+and Claude Code setup plus integration boundary](docs/07-mcp-server.md).
+
+## Add your own memory
+
+Bind memory to a stable project, release, person, or other entity so similarly
+named facts and counts do not leak across scopes:
+
+```bash
+brain-ai entity add --name "Atlas" --type project --alias A
+brain-ai remember --type episodic --entity Atlas \
+  --text "The release moved to Thursday" --promote semantic
+brain-ai remember --type state --entity Atlas --key open_reviews --value 3
+brain-ai remember --type rule --entity Atlas \
+  --pattern 'deploy\s+production' --text "release approval is required"
+brain-ai run --entity Atlas --action "deploy production" \
+  "What changed recently and how many reviews remain?"
+brain-ai consolidate          # preview
+brain-ai consolidate --apply  # explicit promotion
+brain-ai checkpoint --summary "release review complete"
+```
+
+The component ontology is now validated when the runtime starts. Inspect it
+with `brain-ai ontology`; the canonical schema remains
+[`schema/brain_components.yaml`](schema/brain_components.yaml).
+
+## Why the brain-inspired separation?
+
+Human memory and control rely on partly distinct but interacting functions.
+Brain-AI Memory borrows that **functional separation—not literal brain
+anatomy** and turns it into inspectable software responsibilities. Brain-region
+labels are mnemonics, not one-to-one localization or biological simulation.
+If the analogy is not useful in your stack, keep the contracts and discard the
+labels. See the [mapping and its limits](docs/01-the-mapping.md).
+
+> **Evidence boundary.** The public runtime and deterministic ablation verify
+> that the software contracts execute distinct responsibilities. They do not
+> prove that brain inspiration causes better LLM answers or that this system
+> beats RAG end to end. [Evidence and limitations](#evidence-status)
 
 ## Diagnose the failure you already see
 
@@ -161,8 +232,9 @@ loop or adopt only the component that matches your failure:
 
 | Your goal | Start here | First success criterion |
 |---|---|---|
+| connect the control layer to an existing agent | [MCP server](docs/07-mcp-server.md) | `brain_context` returns scoped memory and a deterministic gate verdict |
 | run the differentiated lifecycle end to end | [`brain-ai` runtime](docs/05-runtime.md) | install, run, checkpoint, and inspect a routed trace locally |
-| connect Obsidian / Smart Connections | [semantic adapters](docs/06-adapters-and-observer.md) | MCP and vault fallback hits name their backend |
+| connect Obsidian / Smart Connections | [semantic adapters](docs/06-adapters-and-observer.md) | v1 and v2 responses work; v2 hybrid ranking is preserved without duplicate BM25 |
 | observe the loop without private infrastructure | [clean-room observer](docs/06-adapters-and-observer.md#clean-room-command-center) | component counts and audit events render on localhost |
 | stop one repeated deterministic violation | [behavioral guard](templates/hooks/behavioral-guard.py) | the unsafe pattern is blocked while nearby safe actions pass |
 | surface a judgment check without blocking | [self-check trigger](templates/hooks/self-check-trigger.py) | the warning fires only in the intended context |
@@ -366,6 +438,7 @@ those systems.
 | [docs/04-principles.md](docs/04-principles.md) | short judgment-bound operating principles |
 | [docs/05-runtime.md](docs/05-runtime.md) | installable CLI, stores, routing, harnesses, and lifecycle |
 | [docs/06-adapters-and-observer.md](docs/06-adapters-and-observer.md) | Smart Connections compatibility and clean-room Command Center |
+| [docs/07-mcp-server.md](docs/07-mcp-server.md) | provider-neutral MCP tools, resources, setup, and security boundary |
 | [src/brain_ai_memory/](src/brain_ai_memory/) | public Python runtime implementation |
 | [tests/](tests/) | end-to-end runtime and adapter tests |
 | [CHANGELOG.md](CHANGELOG.md) | release-level changes and evidence boundaries |

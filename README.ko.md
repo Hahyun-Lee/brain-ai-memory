@@ -2,39 +2,21 @@
 
 # Brain-AI Memory
 
-> **여러 세션에 걸쳐 올바른 맥락을 기억하고, 규칙을 강제하고, 정확한 상태를
-> 보존하고, 절차를 끝까지 수행해야 하는 에이전트를 위한 local-first
-> memory/control runtime입니다.**
+> **에이전트가 올바른 기억을 찾았습니다. 그런데도 잘못 행동했습니다.**
 
-**지금 설치 가능:** public alpha `v0.2`. Local demo에는 API key, model call,
-database server, 외부 service가 필요하지 않습니다.
+Brain-AI Memory는 여러 세션에 걸쳐 일하는 에이전트를 위한 local control
+layer입니다. 기억을 **사건·지식·규칙·정확한 상태·실행 절차**로 구분하고,
+stable entity에 연결한 뒤 행동을 검사하고, fallback을 끝까지 수행하고,
+오래된 기억을 갱신합니다.
 
-인간의 기억과 행동 조절은 하나의 저장소가 아니라 서로 구분되면서 상호작용하는
-여러 기능에 의존합니다. Brain-AI Memory는 **뇌의 해부학을 그대로 모사하지
-않고 기능적 분화라는 설계 원칙**을 가져와 store, routing, deterministic
-guard, executable fallback sequence, lifecycle operation이라는 검사 가능한
-software contract로 번역합니다.
+또 하나의 vector database가 아닙니다. 기존 model, RAG, tool, workflow
+engine은 그대로 두고, 검색만으로 충분하지 않은 지점에 연결합니다.
 
-![Graphical abstract: 혼란스러운 agent의 뒤섞인 history가 input gate를 거쳐 event, knowledge, rule, exact state, executable sequence가 분리된 brain-inspired software runtime으로 들어가고, lifecycle loop가 memory를 versioning·archive한 뒤 같은 agent가 compact하고 승인된 context bundle을 받는 과정](docs/assets/graphical-abstract.png)
+**문제의 본질은 저장 용량이 아니라 행동의 연속성입니다.** 다음 세션이 올바른
+entity, 최신 사실, 정확한 값, 적용할 규칙, 완료할 절차를 사용하고, 실행 후
+memory를 더 나은 상태로 남기는지가 핵심입니다.
 
-| 뇌에서 착안한 원리 | AI 구현 | 관찰 가능한 결과 |
-|---|---|---|
-| 사건·지식·행동·수량 기능을 분리 | episodic/semantic store, exact state, traced routing | 모든 실패를 ‘retrieval 문제’로 뭉개지 않고 담당 subsystem까지 추적 |
-| 행동을 gate하고 숙련된 sequence를 조정 | deterministic guard와 executable fallback | 금지 행동은 차단되고 등록된 fallback은 성공 또는 소진까지 진행 |
-| 재사용 과정에서 변화나 충돌이 드러난 기억을 갱신 | 승인된 consolidation, conflict-triggered reconsolidation, 7가지 lifecycle operation | provenance를 보존하며 승격·대체·압축·보관·망각 가능 |
-
-*뇌 영역 이름은 기능을 기억하기 위한 표지이며, 각 영역이 해당 기능을 단독
-수행한다는 해부학적 주장이 아닙니다.* 이 runtime은 기존 model, retriever,
-workflow engine 주변에서 작동하며 이를 대체하지 않습니다. [뇌 기능에서
-software contract로의 mapping과 한계](docs/01-the-mapping.md)를 함께 공개합니다.
-
-> **근거의 경계.** 공개 runtime은 이 contract들을 설치하고 실행할 수 있음을,
-> 운영 기록은 지속적으로 사용했음을 보여줍니다. Retrieval test와 contract
-> 비교는 각각 명시한 대상만 측정합니다. 이것만으로 brain-inspired mapping이
-> 단순한 memory보다 end-to-end LLM 정확도를 높였다고 주장하지 않습니다.
-> [근거와 한계](#근거-현황)
-
-## 전체 local loop 설치하고 실행하기
+## 1분 만에 문제와 해결 확인하기
 
 API key, model call, database server, 외부 service가 필요하지 않습니다.
 
@@ -45,28 +27,119 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install .
 
-brain-ai init
-brain-ai demo
-brain-ai status
+brain-ai tour
 ```
 
-Demo는 episodic·semantic memory, exact numerical state, procedural rule을
-기록합니다. 이어서 한 query를 관련 component로 routing하고, action gate를
-적용하고, audit trace와 checkpoint를 생성합니다. 모든 상태는
-`./.brain-ai/`에만 저장됩니다.
+```text
+Brain-AI Memory · failure → controlled outcome
+1  BIND     Atlas 2.1 → belongs_to → Atlas
+2  RECALL   Atlas 2.1 release day is Thursday.
+3  STATE    open_reviews = 3
+4  GUARD    blocked — release approval is required before production deployment
+5  FALLBACK completed after 2 attempts
+6  UPDATE   old fact → superseded by → new fact
+✓  HANDOFF  checkpoint created
+```
+
+일반 retriever도 이 예제의 release note를 찾을 수 있습니다. 그러나 그것만으로
+작업이 끝나지는 않습니다. 에이전트는 최신 사실을 사용하고, 정확한 숫자를
+추측하지 않고 읽고, release rule을 지키고, 등록된 fallback을 완료하고, 다음
+세션에 올바른 상태를 남겨야 합니다. 모든 결과는 `./.brain-ai/`에서 확인할 수
+있습니다.
+
+## 누가 사용해야 하나?
+
+| 대상 | 적합성 |
+|---|---|
+| Codex·Claude Code 고급 사용자 | **적합** — 여러 세션·프로젝트에 걸친 반복 작업에 durable state, rule, handoff가 필요할 때 |
+| agent·workflow·연구 도구 개발자 | **가장 핵심적인 사용자** — host loop에 context, gate, execution, lifecycle을 연결할 수 있음 |
+| 감사 가능한 local agent를 운영하는 팀 | **적합** — inspectable control layer로 사용하며 production hardening은 별도 필요 |
+| 더 나은 일회성 대화를 원하는 일반 ChatGPT·Claude 사용자 | **직접 사용할 필요 없음** — 이 기술을 사용한 application을 통해 간접적으로 이용 |
+| one-shot agent 또는 단순 문서 검색 | **대체로 불필요** — 먼저 context나 RAG로 충분한지 확인 |
+
+오래된 사실 재사용, project identity 혼합, 정확한 값 추측, 기록된 규칙 무시,
+fallback 중단, 갱신·보관할 memory를 결정하지 못하는 문제가 반복될 때
+사용합니다. 이것은 agent를 설정하는 사람을 위한 infrastructure이지 일반
+소비자용 chat application이 아닙니다.
+
+Codex/Claude의 session resume와 built-in memory도 유용합니다. 그것만으로
+문제가 해결된다면 교체하지 마세요. Brain-AI Memory는 operational state를
+provider-neutral하고 typed·inspectable·action-aware하게 여러 agent나 workflow
+사이에서 유지·갱신해야 하는 더 좁은 경우를 위한 것입니다.
+
+![Graphical abstract: 혼란스러운 agent의 뒤섞인 history가 input gate를 거쳐 event, knowledge, rule, exact state, executable sequence가 분리된 brain-inspired software runtime으로 들어가고, lifecycle loop가 memory를 versioning·archive한 뒤 같은 agent가 compact하고 승인된 context bundle을 받는 과정](docs/assets/graphical-abstract.png)
+
+## 기존 에이전트에 연결하기
+
+MCP interface를 함께 설치합니다.
 
 ```bash
-brain-ai remember --type episodic --text "배포일이 목요일로 변경됐다" --promote semantic
-brain-ai remember --type state --key open_reviews --value 3
-brain-ai run "최근 무엇이 바뀌었고 review가 몇 개 남았나?"
-brain-ai consolidate          # preview
-brain-ai consolidate --apply  # 명시적 승격
-brain-ai serve                # http://127.0.0.1:8765
+python -m pip install ".[mcp]"
+brain-ai-mcp --home /absolute/path/to/.brain-ai
 ```
 
-[한국어 runtime guide](docs/05-runtime.ko.md), [adapter와 observer
-guide](docs/06-adapters-and-observer.ko.md), 기존 [single-component
-example](examples/README.md)을 참고하세요.
+MCP client에는 다음과 같은 server 설정을 추가합니다.
+
+```json
+{
+  "mcpServers": {
+    "brain-ai-memory": {
+      "command": "brain-ai-mcp",
+      "args": ["--home", "/absolute/path/to/.brain-ai"]
+    }
+  }
+}
+```
+
+Codex CLI·desktop·IDE와 Claude Code는 local MCP server를 지원합니다.
+에이전트는 행동 전에 `brain_context` 또는 `brain_check_action`을 호출하고,
+작업 후에는 사건·상태와 checkpoint를 기록합니다. MCP interface는 보안을
+위해 임의 shell 실행을 노출하지 않습니다. 허용된 행동은 기존 agent나
+workflow engine에서 실행합니다.
+
+**연결 자체가 강제는 아닙니다.** MCP는 tool을 사용할 수 있게 하지만,
+`gate.allowed = false`를 실제 중단 조건으로 처리하는 것은 host의 책임입니다.
+결정론적 차단이 필요하면 실행을 `brain-ai harness`로 통과시키거나 host의
+pre-action hook에 verdict를 연결해야 합니다. 그렇지 않으면 MCP gate는
+advisory입니다. [Codex·Claude Code 설정과 integration
+boundary](docs/07-mcp-server.ko.md)를 참고하세요.
+
+## 내 기억 추가하기
+
+기억을 project, release, person 같은 stable entity에 연결하면 이름이 비슷한
+사실이나 숫자가 다른 범위에 섞이는 것을 막을 수 있습니다.
+
+```bash
+brain-ai entity add --name "Atlas" --type project --alias A
+brain-ai remember --type episodic --entity Atlas \
+  --text "배포일이 목요일로 변경됐다" --promote semantic
+brain-ai remember --type state --entity Atlas --key open_reviews --value 3
+brain-ai remember --type rule --entity Atlas \
+  --pattern 'deploy\s+production' --text "release 승인이 필요하다"
+brain-ai run --entity Atlas --action "deploy production" \
+  "최근 무엇이 바뀌었고 review가 몇 개 남았나?"
+brain-ai consolidate          # preview
+brain-ai consolidate --apply  # 명시적 승격
+brain-ai checkpoint --summary "release review 완료"
+```
+
+Runtime은 시작할 때 component ontology를 검증합니다. `brain-ai ontology`로
+확인할 수 있으며 canonical schema는
+[`schema/brain_components.yaml`](schema/brain_components.yaml)입니다.
+
+## 왜 뇌의 기능 분화에서 착안했나?
+
+인간의 기억과 행동 조절은 하나의 저장소가 아니라 서로 구분되면서 상호작용하는
+여러 기능에 의존합니다. Brain-AI Memory는 **뇌 해부학의 복제가 아니라 기능적
+분화라는 설계 원리**를 검사 가능한 software responsibility로 번역합니다.
+뇌 영역 이름은 기억을 돕는 표지이며 일대일 국재화나 생물학적 simulation
+주장이 아닙니다. 비유가 유용하지 않다면 label을 버리고 contract만 사용해도
+됩니다. [mapping과 그 한계](docs/01-the-mapping.md)를 함께 공개합니다.
+
+> **근거의 경계.** 공개 runtime과 deterministic ablation은 software
+> contract들이 서로 다른 책임을 실행함을 검증합니다. Brain inspiration이 더
+> 좋은 LLM 답변의 원인이라거나 이 시스템이 RAG를 end-to-end로 능가한다는
+> 증거는 아닙니다. [근거와 한계](#근거-현황)
 
 ## 이미 겪고 있는 실패부터 진단하세요
 
@@ -155,8 +228,9 @@ Clean-room public runtime을 실제로 설치할 수 있습니다. 통합 local 
 
 | 목표 | 시작점 | 첫 성공 기준 |
 |---|---|---|
+| 기존 agent에 control layer 연결 | [한국어 MCP server](docs/07-mcp-server.ko.md) | `brain_context`가 scoped memory와 deterministic gate verdict 반환 |
 | differentiated lifecycle 전체 실행 | [`brain-ai` runtime](docs/05-runtime.ko.md) | local에서 install, run, checkpoint 후 routed trace 확인 |
-| Obsidian / Smart Connections 연결 | [semantic adapter](docs/06-adapters-and-observer.ko.md) | MCP와 vault fallback result가 backend를 명시 |
+| Obsidian / Smart Connections 연결 | [semantic adapter](docs/06-adapters-and-observer.ko.md) | v1·v2 response를 처리하고 v2 hybrid ranking을 BM25 중복 없이 보존 |
 | 비공개 인프라 없이 loop 관찰 | [clean-room observer](docs/06-adapters-and-observer.ko.md#clean-room-command-center) | localhost에서 component count와 audit event 확인 |
 | 반복되는 결정론적 위반 하나 차단 | [behavioral guard](templates/hooks/behavioral-guard.py) | 위험한 pattern은 차단되고 유사한 안전 행동은 통과 |
 | 차단 없이 판단 검사를 표면화 | [self-check trigger](templates/hooks/self-check-trigger.py) | 의도한 context에서만 warning 발생 |
@@ -357,6 +431,7 @@ pilot만으로 전체 아키텍처가 이 시스템들보다 우월하다고 볼
 | [docs/04-principles.md](docs/04-principles.md) | 판단과 연결된 짧은 운영 원칙 |
 | [docs/05-runtime.ko.md](docs/05-runtime.ko.md) | 설치 가능한 CLI, store, routing, harness, lifecycle |
 | [docs/06-adapters-and-observer.ko.md](docs/06-adapters-and-observer.ko.md) | Smart Connections 호환과 clean-room Command Center |
+| [docs/07-mcp-server.ko.md](docs/07-mcp-server.ko.md) | provider-neutral MCP tool, resource, 설정, security boundary |
 | [src/brain_ai_memory/](src/brain_ai_memory/) | 공개 Python runtime implementation |
 | [tests/](tests/) | end-to-end runtime과 adapter test |
 | [CHANGELOG.md](CHANGELOG.md) | release change와 evidence boundary |

@@ -21,7 +21,10 @@ def emit(value, as_json: bool = False) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="brain-ai", description="Installable Brain-AI memory lifecycle runtime")
+    parser = argparse.ArgumentParser(
+        prog="brain-ai",
+        description="Turn retrieved memory into reliable cross-session agent action",
+    )
     parser.add_argument("--home", help="runtime directory (default: $BRAIN_AI_HOME or ./.brain-ai)")
     sub = parser.add_subparsers(dest="subcommand", required=True)
 
@@ -33,6 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     remember.add_argument("--text")
     remember.add_argument("--source", default="cli")
     remember.add_argument("--tags", nargs="*", default=[])
+    remember.add_argument("--entity", action="append", default=[], help="entity id, name, or alias; repeatable")
     remember.add_argument("--promote", choices=("semantic", "rule"))
     remember.add_argument("--pattern", help="regular expression for a procedural rule")
     remember.add_argument("--effect", choices=("block", "warn"), default="block")
@@ -43,12 +47,14 @@ def build_parser() -> argparse.ArgumentParser:
     recall = sub.add_parser("recall", help="route and retrieve component-specific memory")
     recall.add_argument("query")
     recall.add_argument("--action")
+    recall.add_argument("--entity", help="scope recall to an entity id, name, or alias")
     recall.add_argument("--limit", type=int)
     recall.add_argument("--json", action="store_true")
 
     run = sub.add_parser("run", help="prepare an auditable context bundle for any executor")
     run.add_argument("query")
     run.add_argument("--action")
+    run.add_argument("--entity", help="scope context and rules to one entity")
     run.add_argument("--limit", type=int)
     run.add_argument("--json", action="store_true")
 
@@ -103,6 +109,49 @@ def build_parser() -> argparse.ArgumentParser:
 
     demo = sub.add_parser("demo", help="run an end-to-end local demonstration")
     demo.add_argument("--json", action="store_true")
+
+    tour = sub.add_parser(
+        "tour",
+        help="show entity binding, recall, state, guard, fallback, and lifecycle outcomes",
+    )
+    tour.add_argument("--json", action="store_true")
+
+    entity = sub.add_parser("entity", help="create and inspect stable entity identities")
+    entity_sub = entity.add_subparsers(dest="entity_command", required=True)
+    entity_add = entity_sub.add_parser("add", help="create or resolve an entity")
+    entity_add.add_argument("--name", required=True)
+    entity_add.add_argument("--type", default="concept")
+    entity_add.add_argument("--alias", action="append", default=[])
+    entity_add.add_argument("--json", action="store_true")
+    entity_list = entity_sub.add_parser("list", help="list entities")
+    entity_list.add_argument("--query")
+    entity_list.add_argument("--json", action="store_true")
+    entity_show = entity_sub.add_parser("show", help="show an entity and its relations")
+    entity_show.add_argument("reference")
+    entity_show.add_argument("--json", action="store_true")
+
+    relation = sub.add_parser("relation", help="create and inspect typed entity relations")
+    relation_sub = relation.add_subparsers(dest="relation_command", required=True)
+    relation_add = relation_sub.add_parser("add", help="link two existing entities")
+    relation_add.add_argument("subject")
+    relation_add.add_argument("predicate")
+    relation_add.add_argument("object_ref")
+    relation_add.add_argument("--source", default="cli")
+    relation_add.add_argument("--json", action="store_true")
+    relation_list = relation_sub.add_parser("list", help="list relations")
+    relation_list.add_argument("--entity")
+    relation_list.add_argument("--json", action="store_true")
+
+    ontology = sub.add_parser("ontology", help="validate and inspect the executable component schema")
+    ontology.add_argument("--full", action="store_true")
+    ontology.add_argument("--json", action="store_true")
+
+    mcp = sub.add_parser("mcp", help="serve Brain-AI tools and resources over MCP")
+    mcp_sub = mcp.add_subparsers(dest="mcp_command", required=True)
+    mcp_serve = mcp_sub.add_parser("serve", help="start the MCP server")
+    mcp_serve.add_argument("--transport", choices=("stdio", "streamable-http"), default="stdio")
+    mcp_serve.add_argument("--host", default="127.0.0.1")
+    mcp_serve.add_argument("--port", type=int, default=8000)
     return parser
 
 
@@ -125,8 +174,13 @@ def doctor(runtime: BrainAIRuntime) -> dict:
         "semantic_backend": semantic.get("backend", "local"),
         "vault_exists": None if not vault else Path(vault).expanduser().is_dir(),
         "mcp_command_configured": bool(command),
+        "ontology_valid": runtime.ontology_summary["component_count"] > 0,
     }
-    checks["ready"] = checks["home_exists"] and checks["database_exists"]
+    checks["ready"] = (
+        checks["home_exists"]
+        and checks["database_exists"]
+        and checks["ontology_valid"]
+    )
     return checks
 
 
@@ -155,6 +209,79 @@ def run_demo(runtime: BrainAIRuntime) -> dict:
     }
 
 
+def run_tour(runtime: BrainAIRuntime) -> dict:
+    project = runtime.store.put_entity("Atlas", entity_type="project")
+    release = runtime.store.put_entity("Atlas 2.1", entity_type="release", aliases=["2.1"])
+    runtime.store.add_relation(release["id"], "belongs_to", project["id"], source="tour")
+
+    old = runtime.store.put_knowledge(
+        "Atlas 2.1 release day is Friday.", source="tour", entities=[release["id"]]
+    )
+    updated = runtime.reconsolidate(
+        old["id"], "Atlas 2.1 release day is Thursday.", source="tour"
+    )
+    runtime.store.append_event(
+        "Atlas 2.1 moved from Friday to Thursday after the release review.",
+        source="tour",
+        entities=[release["id"]],
+    )
+    runtime.store.set_state("open_reviews", 3, source="tour", entity=release["id"])
+    existing_rules = [rule for rule in runtime.store.rules() if rule["source"] == "tour"]
+    if not existing_rules:
+        runtime.store.add_rule(
+            r"deploy\s+production",
+            effect="block",
+            reason="release approval is required before production deployment",
+            source="tour",
+            entities=[release["id"]],
+        )
+
+    prepared = runtime.process(
+        "What changed recently, and how many open reviews remain?",
+        proposed_action="deploy production",
+        entity=release["id"],
+    )
+    fallback = runtime.execute_sequence(
+        "validate the release with a registered fallback",
+        [
+            [sys.executable, "-c", "raise SystemExit(1)"],
+            [sys.executable, "-c", "print('fallback validation passed')"],
+        ],
+    )
+    checkpoint = runtime.checkpoint("five-minute tour completed")
+    state = next(
+        item for item in prepared["memory"].get("IPS", []) if item["key"] == "open_reviews"
+    )
+    active_fact = runtime.store.get_knowledge(updated["new_id"])
+    return {
+        "entity": f"{release['name']} → belongs_to → {project['name']}",
+        "found": active_fact["text"],
+        "exact_state": f"open_reviews = {state['value']}",
+        "blocked": prepared["gate"]["reason"],
+        "fallback": f"completed after {fallback['attempt_count']} attempts",
+        "updated": f"{old['id']} → superseded by → {updated['new_id']}",
+        "checkpoint": checkpoint["id"],
+        "evidence": {
+            "context": prepared,
+            "fallback_sequence": fallback,
+        },
+    }
+
+
+def emit_tour(value: dict, as_json: bool) -> None:
+    if as_json:
+        emit(value, True)
+        return
+    print("Brain-AI Memory · failure → controlled outcome")
+    print(f"1  BIND     {value['entity']}")
+    print(f"2  RECALL   {value['found']}")
+    print(f"3  STATE    {value['exact_state']}")
+    print(f"4  GUARD    blocked — {value['blocked']}")
+    print(f"5  FALLBACK {value['fallback']}")
+    print(f"6  UPDATE   {value['updated']}")
+    print(f"✓  HANDOFF  checkpoint {value['checkpoint']}")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     runtime = BrainAIRuntime(resolve_home(args.home))
@@ -167,25 +294,56 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValueError("--text is required for episodic memory")
                 value = runtime.store.append_event(
                     args.text, source=args.source, tags=args.tags,
-                    promote_to=args.promote, rule_pattern=args.pattern,
+                    promote_to=args.promote, rule_pattern=args.pattern, entities=args.entity,
                 )
             elif args.type == "semantic":
                 if not args.text:
                     raise ValueError("--text is required for semantic memory")
-                value = runtime.store.put_knowledge(args.text, source=args.source, tags=args.tags)
+                value = runtime.store.put_knowledge(
+                    args.text, source=args.source, tags=args.tags, entities=args.entity
+                )
             elif args.type == "rule":
                 if not args.pattern or not args.text:
                     raise ValueError("--pattern and --text (reason) are required for rule memory")
-                value = runtime.store.add_rule(args.pattern, effect=args.effect, reason=args.text, source=args.source)
+                value = runtime.store.add_rule(
+                    args.pattern,
+                    effect=args.effect,
+                    reason=args.text,
+                    source=args.source,
+                    entities=args.entity,
+                )
             else:
                 if not args.key:
                     raise ValueError("--key is required for state memory")
-                value = runtime.store.set_state(args.key, parse_value(args.value), source=args.source)
+                if len(args.entity) > 1:
+                    raise ValueError("exact state accepts at most one --entity")
+                value = runtime.store.set_state(
+                    args.key,
+                    parse_value(args.value),
+                    source=args.source,
+                    entity=(args.entity or [None])[0],
+                )
             emit(value, args.json)
         elif args.subcommand == "recall":
-            emit(runtime.recall(args.query, limit=args.limit, proposed_action=args.action), args.json)
+            emit(
+                runtime.recall(
+                    args.query,
+                    limit=args.limit,
+                    proposed_action=args.action,
+                    entity=args.entity,
+                ),
+                args.json,
+            )
         elif args.subcommand == "run":
-            emit(runtime.process(args.query, proposed_action=args.action, limit=args.limit), args.json)
+            emit(
+                runtime.process(
+                    args.query,
+                    proposed_action=args.action,
+                    limit=args.limit,
+                    entity=args.entity,
+                ),
+                args.json,
+            )
         elif args.subcommand == "harness":
             command = args.command[1:] if args.command[:1] == ["--"] else args.command
             emit(runtime.execute(args.query, command, timeout=args.timeout, cwd=args.cwd), args.json)
@@ -214,6 +372,39 @@ def main(argv: list[str] | None = None) -> int:
             serve(runtime, args.host or observer.get("host", "127.0.0.1"), args.port or int(observer.get("port", 8765)))
         elif args.subcommand == "demo":
             emit(run_demo(runtime), args.json)
+        elif args.subcommand == "tour":
+            emit_tour(run_tour(runtime), args.json)
+        elif args.subcommand == "entity":
+            if args.entity_command == "add":
+                value = runtime.store.put_entity(
+                    args.name, entity_type=args.type, aliases=args.alias
+                )
+            elif args.entity_command == "list":
+                value = runtime.store.entities(args.query)
+            else:
+                value = runtime.store.get_entity(args.reference)
+                value["relations"] = runtime.store.relations(value["id"])
+            emit(value, args.json)
+        elif args.subcommand == "relation":
+            if args.relation_command == "add":
+                value = runtime.store.add_relation(
+                    args.subject,
+                    args.predicate,
+                    args.object_ref,
+                    source=args.source,
+                )
+            else:
+                value = runtime.store.relations(args.entity)
+            emit(value, args.json)
+        elif args.subcommand == "ontology":
+            emit(runtime.ontology if args.full else runtime.ontology_summary, args.json)
+        elif args.subcommand == "mcp":
+            from .mcp_server import create_mcp_server
+
+            server = create_mcp_server(
+                runtime.home, host=args.host, port=args.port
+            )
+            server.run(transport=args.transport)
         return 0
     except (OSError, ValueError, KeyError, RuntimeError) as exc:
         print(f"brain-ai: {exc}", file=sys.stderr)

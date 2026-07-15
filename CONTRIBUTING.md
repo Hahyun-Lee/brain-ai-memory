@@ -34,7 +34,7 @@ team, or dataset.
 - **Add a worked example.** A tiny, runnable, no-real-data case that makes a doc
   concrete. Single file, standard library only.
 - **Improve the reference runtime.** Preserve the component boundaries, keep
-  the local default dependency-free, add tests, and expose fallback behavior in
+  the local default minimal, add tests, and expose fallback behavior in
   the audit trace rather than hiding it.
 - **Report a break.** Where does the architecture not fit your agent stack? A
   clear description of the mismatch is valuable even without a fix.

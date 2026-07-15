@@ -2,23 +2,40 @@
 
 ## Unreleased
 
+## 0.3.0 — 2026-07-15
+
 ### Added
 
+- provider-neutral MCP server with scoped context, action checks, typed memory
+  writes, entity/relation tools, lifecycle handoffs, and status/ontology
+  resources;
+- stable entity identities, aliases, typed relations, memory bindings, and
+  entity-scoped exact state;
+- startup validation of the canonical component/channel ontology;
+- a concise `brain-ai tour` that demonstrates current fact recall, exact state,
+  action blocking, fallback completion, supersession, and checkpointing; and
+- English and Korean MCP setup and security-boundary guides.
 - 20-case, 21-condition deterministic component-contract ablation with 420 raw
   records, cumulative additions, leave-one-out removals, artifact hashes, and a
   reproducible chart.
+- Smart Connections adapter compatibility with both the v1 result list and v2
+  response envelope, including retrieval provenance and bounded snippets.
 
 ### Changed
 
-- README opening now explains the brain-inspired functional separation, its
-  translation into software contracts, and the observable user outcome before
-  implementation jargon.
+- README opening now explains the practical failure, controlled outcome,
+  one-minute tour, and connection path before implementation jargon.
 - neuroscience language now distinguishes functional inspiration from software
   adaptation and removes one-to-one anatomical or clinical implications.
+- package version advanced to `0.3.0`; MCP remains an optional dependency and
+  arbitrary command execution is intentionally absent from the MCP surface.
+- v2 hybrid Smart Connections profiles retain the server's ranking and disk
+  coverage instead of adding a second local BM25 contribution; v1, `plugin`,
+  and failure paths keep reciprocal-rank fallback.
 
 ### Evidence boundary
 
-The new ablation verifies distinct public software contracts. It does not show
+The ablation verifies distinct public software contracts. It does not show
 that biological inspiration causes the result, that the runtime improves LLM
 answer quality, or that the architecture beats RAG on an external workload.
 

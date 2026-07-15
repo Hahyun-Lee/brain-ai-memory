@@ -107,7 +107,7 @@ class MCPStdioClient:
                 {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
-                    "clientInfo": {"name": "brain-ai-memory", "version": "0.2.0"},
+                    "clientInfo": {"name": "brain-ai-memory", "version": "0.3.0"},
                 },
             )
             self.notify("notifications/initialized", {})
@@ -193,6 +193,7 @@ class SmartConnectionsAdapter:
         self.merge_local = merge_local
         self.fallback = VaultBM25Adapter(self.vault_path)
         self.last_diagnostic: dict = {}
+        self._server_hybrid = False
 
     def _mcp_search(self, query: str, limit: int) -> list[dict]:
         started = time.perf_counter()
@@ -208,13 +209,30 @@ class SmartConnectionsAdapter:
         content = result.get("content", [])
         text = next((item.get("text", "") for item in content if item.get("type") == "text"), "[]")
         raw = json.loads(text)
+        if isinstance(raw, dict):
+            raw_hits = raw.get("results", [])
+            mode = raw.get("mode")
+            profile = raw.get("profile")
+            warning = raw.get("warning")
+        else:
+            raw_hits = raw
+            mode = None
+            profile = None
+            warning = None
+        self._server_hybrid = profile in {"fast", "balanced", "adaptive", "quality"}
         hits = []
-        for position, item in enumerate(raw if isinstance(raw, list) else []):
+        for position, item in enumerate(raw_hits if isinstance(raw_hits, list) else []):
+            if not isinstance(item, dict):
+                continue
             note_path = str(item.get("path", ""))
+            if not note_path:
+                continue
             full_path = (self.vault_path / note_path).resolve()
+            note_text = str(item.get("snippet", ""))
             try:
                 full_path.relative_to(self.vault_path)
-                note_text = full_path.read_text(encoding="utf-8", errors="replace") if full_path.is_file() else ""
+                if not note_text and full_path.is_file():
+                    note_text = full_path.read_text(encoding="utf-8", errors="replace")[:4_000]
             except (OSError, ValueError):
                 note_text = ""
             hits.append(
@@ -223,10 +241,15 @@ class SmartConnectionsAdapter:
                     "text": note_text, "source": str(full_path),
                     "score": float(item.get("similarity", item.get("score", 1 / (position + 1)))),
                     "component": "ATL", "kind": "semantic", "backend": "smart-connections-mcp",
+                    "vault": item.get("vault"), "scope": item.get("scope"),
+                    "block": item.get("block"), "retrieval": item.get("retrieval", []),
+                    "score_type": item.get("scoreType"),
                 }
             )
         self.last_diagnostic = {
             "mcp": "ok", "mcp_hits": len(hits),
+            "mcp_mode": mode, "mcp_profile": profile, "mcp_warning": warning,
+            "server_hybrid": self._server_hybrid,
             "latency_ms": round((time.perf_counter() - started) * 1000, 2),
         }
         return hits
@@ -239,7 +262,26 @@ class SmartConnectionsAdapter:
             mcp_hits = self._mcp_search(query, limit)
         except (OSError, ValueError, RuntimeError, TimeoutError, json.JSONDecodeError) as exc:
             error = f"{type(exc).__name__}: {exc}"
-        local_hits = self.fallback.search(query, limit) if (self.merge_local or not mcp_hits) else []
+        # v2 hybrid profiles already discover disk-only Markdown and include a
+        # BM25 leg. Repeating local BM25 would double-count the same evidence
+        # and alter the server's measured ranking. Keep the local merge for v1,
+        # upstream `plugin` profile, and MCP failures.
+        local_hits = (
+            self.fallback.search(query, limit)
+            if (not mcp_hits or (self.merge_local and not self._server_hybrid))
+            else []
+        )
+        if mcp_hits and not local_hits:
+            output = mcp_hits[:limit]
+            self.last_diagnostic.update(
+                {
+                    "fallback_hits": 0, "error": error,
+                    "returned": len(output),
+                    "total_latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                    "fusion": "server-ranked",
+                }
+            )
+            return output
         # Cosine and BM25 scores are not calibrated to the same scale. Fuse
         # ranks instead of letting the numerically larger backend dominate.
         merged: dict[str, dict] = {}

@@ -19,6 +19,8 @@ def dashboard_html(runtime: BrainAIRuntime) -> str:
             ("semantic", "ATL · Knowledge"),
             ("rules", "BG · Rules"),
             ("numerical_state", "IPS · State"),
+            ("entities", "HC · Entities"),
+            ("relations", "HC · Relations"),
             ("audit_events", "PFC · Traces"),
             ("checkpoints", "Checkpoints"),
         )
@@ -56,7 +58,7 @@ code{{background:#eef0f5;padding:2px 5px;border-radius:4px}} footer{{color:var(-
 
 def serve(runtime: BrainAIRuntime, host: str = "127.0.0.1", port: int = 8765) -> None:
     class Handler(BaseHTTPRequestHandler):
-        server_version = "BrainAIObserver/0.2"
+        server_version = "BrainAIObserver/0.3"
         sys_version = ""
 
         def log_message(self, format, *args):
@@ -82,7 +84,7 @@ def serve(runtime: BrainAIRuntime, host: str = "127.0.0.1", port: int = 8765) ->
 
         def do_GET(self):
             if self.path == "/api/health":
-                return self._json({"status": "ok", "version": "0.2.0"})
+                return self._json({"status": "ok", "version": "0.3.0"})
             if self.path == "/api/status":
                 return self._json(runtime.status())
             if self.path == "/api/events":
