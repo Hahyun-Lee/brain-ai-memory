@@ -1,9 +1,11 @@
 # Contributing
 
-Thanks for considering it. This repo is a small, opinionated distillation, so the
-useful contributions are mostly: sharpening the mapping, adding a template or
-worked example others can reuse, or reporting where the architecture breaks for
-your stack. Big framework-ification is out of scope on purpose.
+Thanks for considering it. This repo is an opinionated architecture plus a
+small installable reference runtime. Useful contributions include sharpening
+the mapping, improving a runtime or adapter contract, adding a reusable
+template or worked example, and reporting where the architecture breaks for
+your stack. Hosted-platform features and organization-specific wiring remain
+out of scope.
 
 ## The one hard rule: clean-room
 
@@ -31,6 +33,9 @@ team, or dataset.
   standard library (see the existing hook templates).
 - **Add a worked example.** A tiny, runnable, no-real-data case that makes a doc
   concrete. Single file, standard library only.
+- **Improve the reference runtime.** Preserve the component boundaries, keep
+  the local default dependency-free, add tests, and expose fallback behavior in
+  the audit trace rather than hiding it.
 - **Report a break.** Where does the architecture not fit your agent stack? A
   clear description of the mismatch is valuable even without a fix.
 - **Strengthen the evidence.** The current evidence includes a longitudinal

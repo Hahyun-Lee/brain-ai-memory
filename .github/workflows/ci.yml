@@ -18,6 +18,9 @@ jobs:
       - name: Compile Python
         run: |
           python -m py_compile \
+            src/brain_ai_memory/*.py \
+            tests/test_runtime.py \
+            benchmarks/run_runtime_contract.py \
             benchmarks/plot_retrieval_tradeoff.py \
             benchmarks/run_longmemeval_pilot.py \
             benchmarks/validate_manifest.py \
@@ -26,6 +29,22 @@ jobs:
             examples/02_lifecycle_decision.py \
             templates/hooks/behavioral-guard.py \
             templates/hooks/self-check-trigger.py
+      - name: Install public runtime
+        run: python -m pip install .
+      - name: Test public runtime and adapters
+        run: |
+          python -W error::ResourceWarning -m unittest discover -s tests -v
+          python benchmarks/run_runtime_contract.py --output /tmp/runtime-contract.json
+          python - <<'PY'
+          import json
+          result = json.load(open('/tmp/runtime-contract.json'))
+          runtime = next(row for row in result['summary'] if row['condition'] == 'brain-ai-runtime')
+          assert runtime['passed'] == 14 and runtime['total'] == 14
+          PY
+          runtime_home="$(mktemp -d)"
+          brain-ai --home "$runtime_home" init
+          brain-ai --home "$runtime_home" demo
+          brain-ai --home "$runtime_home" doctor
       - name: Run examples and self-tests
         run: |
           python examples/01_guard_in_action.py

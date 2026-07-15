@@ -13,6 +13,10 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+build/
+dist/
+*.egg-info/
+.brain-ai/
 
 # Local scratch
 *.local

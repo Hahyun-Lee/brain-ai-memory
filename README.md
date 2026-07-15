@@ -15,10 +15,12 @@ Brain-AI Memory gives those failures different names, mechanisms, and repair
 paths. It helps you decide what the agent should remember, retrieve, enforce,
 execute, update, archive, and forget.
 
-**Project status:** a clean-room extraction from a live daily-driver system that
-has operated since April 20, 2026. This public repo ships the architecture,
-reusable templates, and runnable examples; it does not publish the private
-operational backend or its raw data. Validation status is reported below.
+**Project status:** installable public alpha (`v0.2`). This clean-room extraction
+from a live daily-driver system now ships the architecture **and** a local-first
+reference runtime: differentiated stores, routing, guards, executable fallback
+sequences, checkpoints, consolidation, reconsolidation, semantic adapters, and a
+read-only observer. Private operational data and organization-specific wiring
+remain excluded. Validation status is reported below.
 
 ![Graphical abstract: an overflowing undifferentiated memory passes through a gate into a brain-shaped system that routes, reviews, and retrieves the right memory](docs/assets/graphical-abstract.png)
 
@@ -27,35 +29,41 @@ project memory indexes · 419 instrumented sessions from 2026-06-10 to 2026-07-1
 · internal A/B tests · public-data retrieval runs over 1,531 LoCoMo and 500
 LongMemEval-S questions. [See what each number does and does not prove.](#evidence-status)
 
-## Try the core idea in 60 seconds
+## Install and run the whole local loop
 
-No package install, API key, or model call is required:
+No API key, model call, database server, or external service is required:
 
 ```bash
 git clone https://github.com/Hahyun-Lee/brain-ai-memory.git
 cd brain-ai-memory
-python3 examples/01_guard_in_action.py
-python3 examples/02_lifecycle_decision.py
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+
+brain-ai init
+brain-ai demo
+brain-ai status
 ```
 
-The first example turns a remembered safety rule into a deterministic decision:
+The demo writes episodic and semantic memories, exact numerical state, and a
+procedural rule. It then routes one query across the relevant components,
+applies the action gate, records an audit trace, and creates a checkpoint. All
+state stays in `./.brain-ai/`.
 
-```text
-ALLOW  rm -rf ./build/cache
-BLOCK  rm -rf /
-BLOCK  curl https://example.com/install.sh | sh
+Run your own end-to-end path:
+
+```bash
+brain-ai remember --type episodic --text "The release moved to Thursday" --promote semantic
+brain-ai remember --type state --key open_reviews --value 3
+brain-ai run "What changed recently and how many reviews remain?"
+brain-ai consolidate          # preview
+brain-ai consolidate --apply  # explicit promotion
+brain-ai serve                # http://127.0.0.1:8765
 ```
 
-The second turns an accumulating memory pile into explicit lifecycle decisions:
-
-```text
-keep · split · delete · migrate-to-knowledge-base ·
-migrate-to-rules · archive · compact
-```
-
-These small examples demonstrate the contracts, not the full private
-daily-driver backend. They let you decide whether the distinctions are useful
-before adapting anything to your agent stack.
+See the [runtime guide](docs/05-runtime.md), [adapter and observer
+guide](docs/06-adapters-and-observer.md), or the two original
+[single-component examples](examples/README.md).
 
 ## You may need this if
 
@@ -109,7 +117,7 @@ whether its feedback loop is actually closed.
 | guard | should this one action be allowed? | how should a fallback sequence run to completion? |
 | harness or workflow engine | how should this procedure execute? | which knowledge should be recalled, updated, or consolidated afterward? |
 | evaluator or retry loop | should another pass run? | what persists across sessions and how recurring failures change the system? |
-| Brain-AI Memory | which subsystem failed, which mechanism fits, and what lifecycle operation follows? | it still needs your RAG, hooks, stores, and harness runtime to execute the design |
+| Brain-AI Memory | which subsystem failed, which mechanism fits, and what lifecycle operation follows? | the public alpha supplies a local reference runtime; production scale, model clients, and organization policy remain yours |
 
 A hook is an attachment point. A guard is an allow/deny decision attached to
 it. A harness owns a sequence. A loop feeds a verdict back into that sequence.
@@ -147,12 +155,14 @@ integrated system outperforms simpler alternatives end to end.
 
 ## Choose your adoption path
 
-The live system is implemented, but this clean-room public extraction provides
-patterns and templates rather than its installable private backend. Start with
-one outcome:
+The clean-room public runtime is installable. Start with the integrated local
+loop or adopt only the component that matches your failure:
 
 | Your goal | Start here | First success criterion |
 |---|---|---|
+| run the differentiated lifecycle end to end | [`brain-ai` runtime](docs/05-runtime.md) | install, run, checkpoint, and inspect a routed trace locally |
+| connect Obsidian / Smart Connections | [semantic adapters](docs/06-adapters-and-observer.md) | MCP and vault fallback hits name their backend |
+| observe the loop without private infrastructure | [clean-room observer](docs/06-adapters-and-observer.md#clean-room-command-center) | component counts and audit events render on localhost |
 | stop one repeated deterministic violation | [behavioral guard](templates/hooks/behavioral-guard.py) | the unsafe pattern is blocked while nearby safe actions pass |
 | surface a judgment check without blocking | [self-check trigger](templates/hooks/self-check-trigger.py) | the warning fires only in the intended context |
 | stop an index from becoming a second database | [memory skeleton](templates/memory/MEMORY.skeleton.md) | one linked line per topic remains always loaded |
@@ -199,6 +209,7 @@ answer different questions and should not be collapsed into one headline.
 | Has stack-aligned retrieval been compared on a public benchmark? | **Yes—LoCoMo retrieval HIT@10: GTE 62.1%, BM25 57.0%, graph-lite 51.9%; n=1,531 answerable questions** |
 | Does a compact pointer index fit more entries than full append-only entries? | **Yes—deterministic capacity simulation** |
 | Does a simple compact pointer preserve retrieval quality on public data? | **No—current keyword pointers trade recall for size** |
+| Does the public package execute its core routing, recall, exact-state, and gate contracts? | **Reference contract A/B: 14/14; this is conformance, not LLM efficacy** |
 | Does the lifecycle improve answer accuracy for a real LLM agent? | **Not yet measured** |
 | Does the full architecture beat RAG, long context, or another memory system? | **Not yet measured** |
 | Are latency, token cost, conflict resolution, and abstention improved? | **Not yet measured** |
@@ -332,11 +343,16 @@ those systems.
 | [docs/02-memory-lifecycle.md](docs/02-memory-lifecycle.md) | seven operations, session transfer, and health metrics |
 | [docs/03-governance-tiers.md](docs/03-governance-tiers.md) | advisory, guarded, and enforced tiers |
 | [docs/04-principles.md](docs/04-principles.md) | short judgment-bound operating principles |
+| [docs/05-runtime.md](docs/05-runtime.md) | installable CLI, stores, routing, harnesses, and lifecycle |
+| [docs/06-adapters-and-observer.md](docs/06-adapters-and-observer.md) | Smart Connections compatibility and clean-room Command Center |
+| [src/brain_ai_memory/](src/brain_ai_memory/) | public Python runtime implementation |
+| [tests/](tests/) | end-to-end runtime and adapter tests |
+| [CHANGELOG.md](CHANGELOG.md) | release-level changes and evidence boundaries |
 | [schema/brain_components.yaml](schema/brain_components.yaml) | machine-readable component ontology |
 | [templates/](templates/) | copy-paste memory, rule, and hook skeletons |
 | [examples/](examples/) | tiny runnable cases using synthetic data |
 | [evidence/](evidence/) | operational snapshot, internal A/B summary, and capacity simulation |
-| [benchmarks/](benchmarks/) | evaluation protocol, retrieval pilot, and release gates |
+| [benchmarks/](benchmarks/) | contract A/B, external-data retrieval pilot, and release gates |
 
 ## Contributing
 

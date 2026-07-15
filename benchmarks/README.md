@@ -24,9 +24,10 @@ consolidation, or reconsolidation was evaluated. Read the
 ## What can be evaluated
 
 The operational system contains a working memory stack, lifecycle rules,
-semantic retrieval, guards, and harnesses. This public clean-room repo does not
-ship that private backend. Therefore a release-grade public comparison still
-requires a reference implementation that:
+semantic retrieval, guards, and harnesses. The public clean-room repo now ships
+an installable reference runtime with independently callable consolidation and
+reconsolidation. A release-grade public comparison must use that implementation
+to:
 
 1. ingests the same timestamped history stream for every condition;
 2. creates memory without seeing the future evaluation question;
@@ -39,6 +40,20 @@ The seven-component architecture is broader than conversational retrieval.
 Long-term QA can test episodic/semantic memory and the two transfer channels.
 Rule gating, fallback completion, exact numerical state, and input filtering
 need separate task suites and must not be declared validated by a QA score.
+
+## Public runtime contract A/B
+
+[`run_runtime_contract.py`](run_runtime_contract.py) compares the installable
+runtime with a flat retrieval-only control on 14 deterministic cases covering
+semantic and episodic recall, exact numerical state, action gating, and
+component routing. The 2026-07-15 reference run scored 14/14 for the runtime and
+8/14 for the control. See the [report](pilots/runtime-contract-20260715/README.md).
+
+This benchmark answers only: “does the public package execute its stated
+component contracts?” The cases are designed around those contracts, so the
+score is not evidence that the system improves LLM QA, general agent quality,
+or performance on an external workload. The flat control is also much faster;
+quality and overhead must both be measured in later external evaluation.
 
 ## Preregistered hypotheses
 

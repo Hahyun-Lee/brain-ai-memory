@@ -1,0 +1,254 @@
+"""End-to-end reference runtime for the Brain-AI component contracts."""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import time
+from pathlib import Path
+
+from .adapters import build_semantic_adapter
+from .config import load_config, resolve_home
+from .storage import MemoryStore, new_id, utc_now
+from .text import tokenize
+
+
+BUILTIN_RULES = [
+    (re.compile(r"\brm\s+-\w*r\w*\s+(/|~|\$HOME)(\s|$)"), "block", "recursive delete of a bare root or home directory"),
+    (re.compile(r"curl[^\n|]*\|\s*(sudo\s+)?(ba)?sh\b"), "block", "download piped directly into a shell"),
+    (re.compile(r"--no-verify|verify\s*=\s*False|InsecureSkipVerify"), "block", "verification bypass"),
+]
+
+NUMERIC_HINTS = re.compile(r"\b(count|number|total|metric|how many)\b|개수|몇\s*개|수치|총합", re.I)
+TEMPORAL_HINTS = re.compile(r"\b(when|before|after|recent|last|timeline|session)\b|언제|이전|이후|최근|세션", re.I)
+PROCEDURAL_HINTS = re.compile(r"\b(rule|must|never|always|procedure|workflow|fallback|how do)\b|규칙|절차|항상|금지|실행", re.I)
+
+
+class BrainAIRuntime:
+    """Provider-neutral control layer; the LLM remains a replaceable executor."""
+
+    def __init__(self, home: str | Path | None = None):
+        self.home = resolve_home(home)
+        self.store = MemoryStore(self.home)
+        self.store.initialize()
+        self.config = load_config(self.home)
+        self.semantic = build_semantic_adapter(self.store, self.config)
+
+    def route(self, query: str, proposed_action: str | None = None) -> list[str]:
+        components: list[str] = ["PFC"]
+        if proposed_action:
+            components.extend(["TH", "BG"])
+        if NUMERIC_HINTS.search(query):
+            components.append("IPS")
+        if TEMPORAL_HINTS.search(query):
+            components.append("HC")
+        if PROCEDURAL_HINTS.search(query):
+            components.extend(["BG", "CB"])
+        components.extend(["ATL", "HC"])
+        return list(dict.fromkeys(components))
+
+    def gate(self, action: str | None) -> dict:
+        if not action:
+            return {"allowed": True, "effect": "allow", "reason": "no proposed action", "rule_id": None}
+        warnings = []
+        for pattern, effect, reason in BUILTIN_RULES:
+            if pattern.search(action):
+                if effect == "block":
+                    return {"allowed": False, "effect": effect, "reason": reason, "rule_id": "builtin"}
+                warnings.append(reason)
+        for rule in self.store.rules():
+            if re.search(rule["pattern"], action):
+                if rule["effect"] == "block":
+                    return {"allowed": False, "effect": "block", "reason": rule["reason"], "rule_id": rule["id"]}
+                warnings.append(rule["reason"])
+        return {
+            "allowed": True,
+            "effect": "warn" if warnings else "allow",
+            "reason": "; ".join(warnings) if warnings else "no rule matched",
+            "rule_id": None,
+        }
+
+    def recall(self, query: str, *, limit: int | None = None, proposed_action: str | None = None) -> dict:
+        limit = limit or int(self.config.get("runtime", {}).get("recall_limit", 5))
+        route = self.route(query, proposed_action)
+        by_component: dict[str, list[dict]] = {}
+        if "ATL" in route:
+            by_component["ATL"] = self.semantic.search(query, limit)
+        if "HC" in route:
+            by_component["HC"] = self.store.search_events(query, limit)
+        if "IPS" in route:
+            by_component["IPS"] = self.store.search_states(query, limit)
+        if "BG" in route:
+            query_terms = set(tokenize(f"{query} {proposed_action or ''}"))
+            rules = []
+            for rule in self.store.rules():
+                rule_terms = set(tokenize(f"{rule['pattern']} {rule['reason']}"))
+                if query_terms & rule_terms or (proposed_action and re.search(rule["pattern"], proposed_action)):
+                    rules.append({**rule, "component": "BG", "kind": "procedural-rule"})
+            by_component["BG"] = rules[:limit]
+        return {"query": query, "route": route, "by_component": by_component}
+
+    def process(self, query: str, *, proposed_action: str | None = None, limit: int | None = None) -> dict:
+        started = time.perf_counter()
+        run_id = new_id("run")
+        gate = self.gate(proposed_action)
+        recall = self.recall(query, limit=limit, proposed_action=proposed_action)
+        result = {
+            "run_id": run_id,
+            "status": "ready" if gate["allowed"] else "blocked",
+            "query": query,
+            "proposed_action": proposed_action,
+            "route": recall["route"],
+            "gate": gate,
+            "memory": recall["by_component"],
+            "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+            "created_at": utc_now(),
+        }
+        self.store.append_audit({"event": "process", **result})
+        return result
+
+    def execute(self, query: str, command: list[str], *, timeout: float = 60, cwd: str | Path | None = None) -> dict:
+        if not command:
+            raise ValueError("harness command is empty")
+        prepared = self.process(query, proposed_action=" ".join(command))
+        if not prepared["gate"]["allowed"]:
+            return prepared
+        started = time.perf_counter()
+        try:
+            completed = subprocess.run(
+                command, cwd=cwd, capture_output=True, text=True,
+                timeout=timeout, shell=False, check=False,
+            )
+            execution = {
+                "returncode": completed.returncode,
+                "stdout": completed.stdout[-100_000:],
+                "stderr": completed.stderr[-100_000:],
+                "timed_out": False,
+            }
+        except subprocess.TimeoutExpired as exc:
+            execution = {
+                "returncode": None,
+                "stdout": (exc.stdout or "")[-100_000:] if isinstance(exc.stdout, str) else "",
+                "stderr": (exc.stderr or "")[-100_000:] if isinstance(exc.stderr, str) else "",
+                "timed_out": True,
+            }
+        prepared["execution"] = execution
+        prepared["status"] = "completed" if execution["returncode"] == 0 else "failed"
+        prepared["execution_latency_ms"] = round((time.perf_counter() - started) * 1000, 3)
+        self.store.append_audit({"event": "harness", **prepared})
+        return prepared
+
+    def execute_sequence(
+        self,
+        query: str,
+        steps: list[list[str]],
+        *,
+        timeout: float = 60,
+        cwd: str | Path | None = None,
+    ) -> dict:
+        """Run explicit fallbacks until one succeeds; never rely on model persistence."""
+        if not steps:
+            raise ValueError("sequence has no steps")
+        sequence_id = new_id("seq")
+        attempts = []
+        status = "failed"
+        for position, command in enumerate(steps, start=1):
+            result = self.execute(query, command, timeout=timeout, cwd=cwd)
+            attempts.append(
+                {
+                    "position": position,
+                    "command": command,
+                    "status": result["status"],
+                    "gate": result["gate"],
+                    "execution": result.get("execution"),
+                }
+            )
+            if result["status"] == "blocked":
+                status = "blocked"
+                break
+            if result["status"] == "completed":
+                status = "completed"
+                break
+        output = {
+            "sequence_id": sequence_id,
+            "status": status,
+            "attempt_count": len(attempts),
+            "attempts": attempts,
+            "created_at": utc_now(),
+        }
+        self.store.append_audit({"event": "sequence", **output})
+        return output
+
+    def checkpoint(self, summary: str = "") -> dict:
+        pending = [event["id"] for event in self.store.events() if event.get("promote_to")]
+        record = {
+            "id": new_id("ckpt"), "summary": summary.strip(),
+            "counts": self.store.counts(), "pending_consolidation": pending,
+            "created_at": utc_now(),
+        }
+        self.store.append_checkpoint(record)
+        self.store.append_audit({"event": "checkpoint", **record})
+        return record
+
+    def consolidate(self, *, apply: bool = False) -> dict:
+        candidates = []
+        for event in self.store.events():
+            target = event.get("promote_to")
+            if target not in {"semantic", "rule"}:
+                continue
+            candidate = {"event_id": event["id"], "target": target, "text": event["text"]}
+            if apply:
+                if target == "semantic":
+                    created = self.store.put_knowledge(
+                        event["text"], source=f"consolidated:{event['id']}", tags=event.get("tags", [])
+                    )
+                    operation = "migrate-to-knowledge-base"
+                else:
+                    pattern = event.get("rule_pattern")
+                    if not pattern:
+                        candidate["status"] = "needs-rule-pattern"
+                        candidates.append(candidate)
+                        continue
+                    created = self.store.add_rule(
+                        pattern, reason=event["text"], source=f"consolidated:{event['id']}"
+                    )
+                    operation = "migrate-to-rules"
+                self.store.record_lifecycle("episodic", event["id"], operation, "approved consolidation")
+                candidate.update({"status": "applied", "created_id": created["id"]})
+            else:
+                candidate["status"] = "pending-approval"
+            candidates.append(candidate)
+        result = {"applied": apply, "candidate_count": len(candidates), "candidates": candidates, "created_at": utc_now()}
+        self.store.append_audit({"event": "consolidation", **result})
+        return result
+
+    def reconsolidate(
+        self,
+        old_id: str,
+        new_text: str,
+        *,
+        source: str = "user",
+        tags: list[str] | None = None,
+    ) -> dict:
+        old = self.store.get_knowledge(old_id)
+        created = self.store.put_knowledge(
+            new_text, source=source, tags=tags or old.get("tags", []), supersedes=old_id
+        )
+        result = {
+            "old_id": old_id,
+            "new_id": created["id"],
+            "status": "superseded",
+            "created_at": utc_now(),
+        }
+        self.store.append_audit({"event": "reconsolidation", **result})
+        return result
+
+    def status(self) -> dict:
+        semantic_config = self.config.get("semantic", {})
+        return {
+            "home": str(self.home),
+            "version": "0.2.0",
+            "counts": self.store.counts(),
+            "semantic_backend": semantic_config.get("backend", "local"),
+            "latest_checkpoint": (self.store.checkpoints(1) or [None])[-1],
+        }
