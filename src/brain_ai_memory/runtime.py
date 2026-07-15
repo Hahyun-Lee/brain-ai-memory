@@ -312,7 +312,7 @@ class BrainAIRuntime:
         semantic_config = self.config.get("semantic", {})
         return {
             "home": str(self.home),
-            "version": "0.3.0",
+            "version": "0.3.1",
             "counts": self.store.counts(),
             "semantic_backend": semantic_config.get("backend", "local"),
             "ontology": self.ontology_summary,

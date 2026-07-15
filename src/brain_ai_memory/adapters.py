@@ -88,6 +88,15 @@ class MCPStdioClient:
         self.messages: queue.Queue[dict] = queue.Queue()
 
     def __enter__(self):
+        return self.start()
+
+    @property
+    def alive(self) -> bool:
+        return bool(self.process and self.process.poll() is None)
+
+    def start(self):
+        if self.alive:
+            return self
         executable = shutil.which(self.command[0]) or (self.command[0] if Path(self.command[0]).exists() else None)
         if not executable:
             raise FileNotFoundError(f"MCP executable not found: {self.command[0]}")
@@ -107,7 +116,7 @@ class MCPStdioClient:
                 {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
-                    "clientInfo": {"name": "brain-ai-memory", "version": "0.3.0"},
+                    "clientInfo": {"name": "brain-ai-memory", "version": "0.3.1"},
                 },
             )
             self.notify("notifications/initialized", {})
@@ -117,6 +126,9 @@ class MCPStdioClient:
         return self
 
     def __exit__(self, *_):
+        self.close()
+
+    def close(self) -> None:
         if self.process and self.process.poll() is None:
             self.process.terminate()
             try:
@@ -129,6 +141,7 @@ class MCPStdioClient:
                 self.process.stdin.close()
             if self.process.stdout:
                 self.process.stdout.close()
+        self.process = None
 
     def _write(self, message: dict) -> None:
         if not self.process or not self.process.stdin:
@@ -186,26 +199,55 @@ class SmartConnectionsAdapter:
 
     name = "smart-connections-hybrid"
 
-    def __init__(self, vault_path: str | Path, command: list[str], timeout: float = 20, merge_local: bool = True):
+    def __init__(
+        self,
+        vault_path: str | Path,
+        command: list[str],
+        timeout: float = 20,
+        merge_local: bool = True,
+        env: dict[str, str] | None = None,
+    ):
         self.vault_path = Path(vault_path).expanduser().resolve()
         self.command = command
         self.timeout = timeout
         self.merge_local = merge_local
+        self.env = {str(key): str(value) for key, value in (env or {}).items()}
         self.fallback = VaultBM25Adapter(self.vault_path)
         self.last_diagnostic: dict = {}
         self._server_hybrid = False
+        self._client: MCPStdioClient | None = None
+        self._client_lock = threading.Lock()
+
+    def close(self) -> None:
+        with self._client_lock:
+            if self._client:
+                self._client.close()
+                self._client = None
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def _mcp_search(self, query: str, limit: int) -> list[dict]:
         started = time.perf_counter()
-        with MCPStdioClient(
-            self.command,
-            {"SMART_VAULT_PATH": str(self.vault_path)},
-            self.timeout,
-        ) as client:
-            result = client.request(
-                "tools/call",
-                {"name": "search_notes", "arguments": {"query": query, "limit": limit, "threshold": 0}},
-            )
+        with self._client_lock:
+            if not self._client or not self._client.alive:
+                self._client = MCPStdioClient(
+                    self.command,
+                    {**self.env, "SMART_VAULT_PATH": str(self.vault_path)},
+                    self.timeout,
+                ).start()
+            try:
+                result = self._client.request(
+                    "tools/call",
+                    {"name": "search_notes", "arguments": {"query": query, "limit": limit, "threshold": 0}},
+                )
+            except Exception:
+                self._client.close()
+                self._client = None
+                raise
         content = result.get("content", [])
         text = next((item.get("text", "") for item in content if item.get("type") == "text"), "[]")
         raw = json.loads(text)
@@ -339,5 +381,6 @@ def build_semantic_adapter(store: MemoryStore, config: dict):
             list(semantic.get("mcp_command") or []),
             float(semantic.get("timeout_seconds", 20)),
             bool(semantic.get("merge_local_vault", True)),
+            dict(semantic.get("mcp_env") or {}),
         )
     raise ValueError(f"unknown semantic backend: {backend}")

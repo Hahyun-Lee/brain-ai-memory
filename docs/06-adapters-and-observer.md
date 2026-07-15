@@ -22,6 +22,7 @@ Example:
     "backend": "smart-connections",
     "vault_path": "/path/to/Obsidian Vault",
     "mcp_command": ["node", "/path/to/smart-connections-mcp/dist/index.js"],
+    "mcp_env": {"SMART_SEARCH_PROFILE": "adaptive"},
     "timeout_seconds": 20,
     "merge_local_vault": true
   }
@@ -37,9 +38,15 @@ ranking instead of counting the same lexical evidence twice. An MCP failure
 still activates local BM25. Diagnostics expose the MCP mode, profile, warning,
 latency, and whether local fallback ran.
 
-For the v2 hybrid fork, set `SMART_SEARCH_PROFILE=adaptive` in the MCP server's
-environment. The adapter uses the bounded v2 snippet rather than injecting the
-entire Markdown file into agent context.
+The adapter keeps one stdio server process alive for its lifetime, so local
+embedding and reranker models are loaded once rather than on every query. Call
+`adapter.close()` when embedding it in a host with an explicit shutdown
+lifecycle; process exit also cleans up the child.
+
+For the v2 hybrid fork, set `SMART_SEARCH_PROFILE=adaptive` through `mcp_env`.
+The adapter uses the bounded v2 snippet rather than injecting the entire
+Markdown file into agent context. `SMART_VAULT_PATH` is always set from
+`vault_path` and cannot be overridden through `mcp_env`.
 
 The tested hybrid server is
 [Hahyun-Lee/smart-connections-mcp](https://github.com/Hahyun-Lee/smart-connections-mcp).

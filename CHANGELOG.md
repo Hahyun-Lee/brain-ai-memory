@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.3.1 — 2026-07-15
+
+### Fixed
+
+- reuse one Smart Connections stdio process across adapter queries so local
+  embedding and reranker models stay warm instead of paying cold-start latency
+  on every recall; and
+- close and discard a failed child connection before activating the observable
+  local fallback.
+
 ## 0.3.0 — 2026-07-15
 
 ### Added

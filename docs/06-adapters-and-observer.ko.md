@@ -20,6 +20,7 @@
     "backend": "smart-connections",
     "vault_path": "/path/to/Obsidian Vault",
     "mcp_command": ["node", "/path/to/smart-connections-mcp/dist/index.js"],
+    "mcp_env": {"SMART_SEARCH_PROFILE": "adaptive"},
     "timeout_seconds": 20,
     "merge_local_vault": true
   }
@@ -34,9 +35,15 @@ reciprocal-rank fusion으로 결합합니다. v2 hybrid profile(`fast`, `balance
 MCP가 실패하면 local BM25가 동작합니다. Diagnostic에는 MCP mode, profile,
 warning, latency, local fallback 실행 여부가 기록됩니다.
 
-v2 hybrid fork에서는 MCP server environment에
-`SMART_SEARCH_PROFILE=adaptive`를 지정하는 것을 권장합니다. Adapter는 Markdown
-전체를 agent context에 넣지 않고 v2의 제한된 snippet을 사용합니다.
+Adapter lifetime 동안 stdio server process 하나를 재사용하므로 local embedding과
+reranker model을 query마다 다시 load하지 않습니다. 명시적 shutdown lifecycle이
+있는 host에 embedding할 때는 `adapter.close()`를 호출하세요. Process 종료 시에도
+child process가 정리됩니다.
+
+v2 hybrid fork에서는 `mcp_env`에 `SMART_SEARCH_PROFILE=adaptive`를 지정하는 것을
+권장합니다. Adapter는 Markdown 전체를 agent context에 넣지 않고 v2의 제한된
+snippet을 사용합니다. `SMART_VAULT_PATH`는 항상 `vault_path`에서 설정되므로
+`mcp_env`로 덮어쓸 수 없습니다.
 
 검증한 hybrid server는
 [Hahyun-Lee/smart-connections-mcp](https://github.com/Hahyun-Lee/smart-connections-mcp)입니다.

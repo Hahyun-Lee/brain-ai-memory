@@ -243,6 +243,7 @@ for line in sys.stdin:
             self.assertIn("vault-bm25", backends)
             self.assertEqual(adapter.last_diagnostic["mcp"], "ok")
             self.assertEqual(adapter.last_diagnostic["fusion"], "reciprocal-rank")
+            adapter.close()
 
     def test_smart_connections_v2_envelope_preserves_server_hybrid_ranking(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -255,17 +256,23 @@ for line in sys.stdin:
             )
             server = root / "fake_mcp_v2.py"
             server.write_text(
-                """import json, sys
+                """import json, os, sys
 for line in sys.stdin:
     msg=json.loads(line)
     if 'id' not in msg: continue
     if msg['method']=='initialize': result={'protocolVersion':'2024-11-05','capabilities':{},'serverInfo':{'name':'fake-v2','version':'2'}}
-    else: result={'content':[{'type':'text','text':json.dumps({'mode':'semantic','profile':'adaptive','results':[{'path':'Hybrid.md','vault':'vault','similarity':0.91,'scope':'note','snippet':'bounded hybrid snippet','retrieval':['plugin-dense','bm25'],'scoreType':'rrf'}]})}]}
+    else: result={'content':[{'type':'text','text':json.dumps({'mode':'semantic','profile':os.environ.get('SMART_SEARCH_PROFILE'),'results':[{'path':'Hybrid.md','vault':'vault','similarity':0.91,'scope':'note','snippet':'bounded hybrid snippet','retrieval':['plugin-dense','bm25'],'scoreType':'rrf'}]})}]}
     print(json.dumps({'jsonrpc':'2.0','id':msg['id'],'result':result}), flush=True)
 """,
                 encoding="utf-8",
             )
-            adapter = SmartConnectionsAdapter(vault, [sys.executable, str(server)], timeout=3, merge_local=True)
+            adapter = SmartConnectionsAdapter(
+                vault,
+                [sys.executable, str(server)],
+                timeout=3,
+                merge_local=True,
+                env={"SMART_SEARCH_PROFILE": "adaptive"},
+            )
             results = adapter.search("hybrid retrieval", limit=5)
             self.assertEqual(results[0]["path"], "Hybrid.md")
             self.assertEqual(results[0]["text"], "bounded hybrid snippet")
@@ -275,6 +282,10 @@ for line in sys.stdin:
             self.assertTrue(adapter.last_diagnostic["server_hybrid"])
             self.assertEqual(adapter.last_diagnostic["fallback_hits"], 0)
             self.assertEqual(adapter.last_diagnostic["fusion"], "server-ranked")
+            first_pid = adapter._client.process.pid
+            adapter.search("second warm query", limit=5)
+            self.assertEqual(adapter._client.process.pid, first_pid)
+            adapter.close()
 
 
 if __name__ == "__main__":
