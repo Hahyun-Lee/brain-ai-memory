@@ -199,6 +199,8 @@ class RuntimeTest(unittest.TestCase):
         self.assertIn("approval", tour["blocked"])
         self.assertEqual(tour["fallback"], "completed after 2 attempts")
         self.assertIn("superseded", tour["updated"])
+        self.assertIn("Friday", tour["updated"])
+        self.assertIn("Thursday", tour["updated"])
 
 
 class MCPServerTest(unittest.TestCase):

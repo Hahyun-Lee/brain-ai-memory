@@ -266,7 +266,7 @@ def run_tour(runtime: BrainAIRuntime) -> dict:
         "exact_state": f"open_reviews = {state['value']}",
         "blocked": prepared["gate"]["reason"],
         "fallback": f"completed after {fallback['attempt_count']} attempts",
-        "updated": f"{old['id']} → superseded by → {updated['new_id']}",
+        "updated": "Friday → superseded by → Thursday",
         "checkpoint": checkpoint["id"],
         "evidence": {
             "context": prepared,
@@ -279,14 +279,15 @@ def emit_tour(value: dict, as_json: bool) -> None:
     if as_json:
         emit(value, True)
         return
-    print("Brain-AI Memory · managed memory → optional control → durable handoff")
+    print("Brain-AI Memory: current memory and a session handoff")
     print(f"1  BIND     {value['entity']}")
     print(f"2  RECALL   {value['found']}")
     print(f"3  STATE    {value['exact_state']}")
-    print(f"4  GUARD    blocked — {value['blocked']}")
-    print(f"5  FALLBACK {value['fallback']}")
-    print(f"6  UPDATE   {value['updated']}")
-    print(f"✓  HANDOFF  checkpoint {value['checkpoint']}")
+    print(f"4  UPDATE   {value['updated']}")
+    print(f"5  HANDOFF  checkpoint {value['checkpoint']}")
+    print("Optional action checks")
+    print(f"6  GUARD    blocked: {value['blocked']}")
+    print(f"7  FALLBACK {value['fallback']}")
 
 
 def main(argv: list[str] | None = None) -> int:
