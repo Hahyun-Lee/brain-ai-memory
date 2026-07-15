@@ -152,7 +152,7 @@ events and create a checkpoint when a handoff is needed.
 
 ## Current boundary
 
-The `v0.3` MCP surface is local-first and single-user. It does not yet include
+The public MCP surface is local-first and single-user. It does not yet include
 automatic Claude Code/Codex/provider transcript ingestion, token-budgeted
 working-context assembly or injection, autonomous lifecycle scheduling,
 conflict-triggered supersession, checkpoint consumption/resume, compact/split

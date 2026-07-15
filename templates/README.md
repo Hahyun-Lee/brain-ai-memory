@@ -15,6 +15,9 @@ standard library and run standalone.
 | `memory/MEMORY.skeleton.md` | The always-loaded memory index: one line per entry, detail linked out | [`docs/02`](../docs/02-memory-lifecycle.md) |
 | `memory/7-op-decision.md` | Pocket version of the 7-operation lifecycle decision | [`docs/02`](../docs/02-memory-lifecycle.md) |
 
+Copy the entire `templates/memory/` directory so the skeleton's example topic
+links remain valid, then rename `MEMORY.skeleton.md` to `MEMORY.md` in the copy.
+
 ## Adapting the hooks
 
 Both hooks share one contract, kept deliberately minimal so it maps onto most

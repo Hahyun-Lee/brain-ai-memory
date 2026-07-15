@@ -6,6 +6,7 @@ import html
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from . import __version__
 from .runtime import BrainAIRuntime
 
 
@@ -84,7 +85,7 @@ def serve(runtime: BrainAIRuntime, host: str = "127.0.0.1", port: int = 8765) ->
 
         def do_GET(self):
             if self.path == "/api/health":
-                return self._json({"status": "ok", "version": "0.3.1"})
+                return self._json({"status": "ok", "version": __version__})
             if self.path == "/api/status":
                 return self._json(runtime.status())
             if self.path == "/api/events":

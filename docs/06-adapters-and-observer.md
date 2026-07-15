@@ -61,9 +61,9 @@ Build it from source and point `mcp_command` at its `dist/index.js`; the
 unscoped npm package currently refers to upstream rather than the hybrid fork.
 
 External vault/MCP hits do not carry Brain-AI entity bindings. For strict
-entity-scoped recall, `v0.3` omits those unverified hits rather than silently
-mixing projects. Run unscoped recall to inspect them, or import/link the
-selected knowledge into the local store.
+entity-scoped recall, the public alpha omits those unverified hits rather than
+silently mixing projects. Run unscoped recall to inspect them, or import/link
+the selected knowledge into the local store.
 
 ## Event and ingestion boundary
 

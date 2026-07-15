@@ -11,6 +11,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import __version__
 from .storage import MemoryStore
 from .text import ranked
 
@@ -116,7 +117,7 @@ class MCPStdioClient:
                 {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
-                    "clientInfo": {"name": "brain-ai-memory", "version": "0.3.1"},
+                    "clientInfo": {"name": "brain-ai-memory", "version": __version__},
                 },
             )
             self.notify("notifications/initialized", {})

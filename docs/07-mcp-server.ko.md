@@ -148,7 +148,7 @@ checkpoint를 만든다.
 
 ## 현재 경계
 
-`v0.3` MCP interface는 local-first single-user alpha입니다. Access control,
+현재 public MCP interface는 local-first single-user alpha입니다. Access control,
 automatic Claude Code/Codex/provider transcript ingestion, token-budgeted working-context
 assembly·injection, autonomous lifecycle scheduling, conflict-triggered supersession,
 checkpoint consume/resume, compact/split transform, physical archive 이동이나 verified

@@ -88,7 +88,17 @@ jobs:
           python - <<'PY'
           import hashlib
           import json
+          import tomllib
           from pathlib import Path
+
+          import yaml
+
+          from brain_ai_memory import __version__
+
+          project = tomllib.loads(Path("pyproject.toml").read_text())
+          citation = yaml.safe_load(Path("CITATION.cff").read_text())
+          assert project["project"]["version"] == __version__
+          assert str(citation["version"]) == __version__
 
           root = Path("benchmarks/pilots/longmemeval-s-retrieval-20260714")
           script_hash = hashlib.sha256(

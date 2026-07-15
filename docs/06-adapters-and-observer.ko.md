@@ -56,10 +56,10 @@ token-safe working-context budget이 아니며 adapter가 model에 result를 주
 Source에서 build한 뒤 `mcp_command`가 `dist/index.js`를 가리키게 하세요. 현재
 unscoped npm package는 hybrid fork가 아니라 upstream을 설치합니다.
 
-외부 vault/MCP result에는 Brain-AI entity binding이 없습니다. `v0.3`은 엄격한
-entity-scoped recall에서 project를 조용히 섞지 않도록 이 unverified result를
-제외합니다. 이를 확인하려면 unscoped recall을 실행하거나 선택한 knowledge를
-local store로 import하고 entity에 연결하세요.
+외부 vault/MCP result에는 Brain-AI entity binding이 없습니다. Public alpha는
+엄격한 entity-scoped recall에서 project를 조용히 섞지 않도록 이 unverified
+result를 제외합니다. 이를 확인하려면 unscoped recall을 실행하거나 선택한
+knowledge를 local store로 import하고 entity에 연결하세요.
 
 ## Event와 ingestion 경계
 

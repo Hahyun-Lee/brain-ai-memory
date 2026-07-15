@@ -2,10 +2,13 @@
 
 ## Unreleased
 
+## 0.4.0 — 2026-07-15
+
 ### Added
 
-- machine-readable `memory` versus `control` categories in ontology v3, with
-  startup validation of the canonical five-plus-two split;
+- required machine-readable `memory` versus `control` categories in ontology
+  v3, with startup validation of category values and observable category
+  counts; the bundled ontology declares the canonical five-plus-two split;
 - normalized semantic-outcome parity and recorded-source provenance checks for
   the ten-mechanism lifecycle/control ablation;
 - a Korean memory-lifecycle guide with the same four-representation and host
@@ -17,16 +20,16 @@
 - reposition the public package around its implemented core: a typed,
   entity-scoped memory-management reference kernel, with guarding and fallback
   execution documented as an optional downstream bridge;
-- make `harness` and `sequence` consume entity scope so entity-bound procedures
-  cannot be skipped at the execution boundary;
+- propagate an optional entity scope through `harness` and `sequence`, so
+  supplied entity-bound rules are evaluated at their execution boundary;
 - separate primary memory evidence from supporting lifecycle/action contract
   conformance and identify controlled end-to-end lifecycle QA as the main
   missing benchmark;
 - the graphical abstract and social preview now separate host-selected memory
   mapping from proposed-action gating;
 - ablation wording now refers to the ten mechanisms actually tested; and
-- define lifecycle `delete` as a recoverable logical tombstone in the reference
-  alpha, with physical erasure delegated to an explicit host retention flow.
+- clarify the copy contract for the memory skeleton and its accompanying topic
+  stubs.
 
 ### Documentation
 
@@ -36,9 +39,16 @@
   integration contract rather than background runtime automation;
 - document that Claude Code/Codex transcript adapters are not included, plus
   the host boundary for authorization, ingestion, preserved evidence, access,
-  backup, encryption, retention, and deletion; and
+  backup, encryption, retention, and deletion;
+- define lifecycle `delete` as a recoverable logical tombstone in the reference
+  alpha, with physical erasure delegated to an explicit host retention flow; and
 - publish the capability path from the current reference kernel to a tested,
   host-integrated closed loop without implying background automation.
+
+### Compatibility
+
+- custom ontology v2 files must add a valid `category: memory` or
+  `category: control` field to every component before upgrading.
 
 ## 0.3.1 — 2026-07-15
 

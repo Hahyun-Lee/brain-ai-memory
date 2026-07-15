@@ -7,6 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from . import __version__
 from .adapters import build_semantic_adapter
 from .config import load_config, resolve_home
 from .ontology import load_ontology
@@ -332,7 +333,7 @@ class BrainAIRuntime:
         semantic_config = self.config.get("semantic", {})
         return {
             "home": str(self.home),
-            "version": "0.3.1",
+            "version": __version__,
             "counts": self.store.counts(),
             "semantic_backend": semantic_config.get("backend", "local"),
             "ontology": self.ontology_summary,
