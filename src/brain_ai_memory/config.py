@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 
+from .privacy import create_private_file, ensure_private_directory
+
 
 DEFAULT_CONFIG = {
     "schema_version": 1,
@@ -23,14 +25,20 @@ DEFAULT_CONFIG = {
 
 def resolve_home(value: str | Path | None = None) -> Path:
     selected = value or os.environ.get("BRAIN_AI_HOME") or ".brain-ai"
-    return Path(selected).expanduser().resolve()
+    lexical = Path(os.path.abspath(Path(selected).expanduser()))
+    if lexical.is_symlink():
+        raise ValueError(f"refusing to use a symbolic-link runtime directory: {lexical}")
+    resolved = lexical.resolve()
+    if lexical.is_symlink():
+        raise ValueError(f"refusing to use a symbolic-link runtime directory: {lexical}")
+    return resolved
 
 
 def write_default_config(home: Path) -> Path:
-    home.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(home)
     path = home / "config.json"
-    if not path.exists():
-        path.write_text(json.dumps(DEFAULT_CONFIG, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    payload = (json.dumps(DEFAULT_CONFIG, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    create_private_file(path, payload)
     return path
 
 

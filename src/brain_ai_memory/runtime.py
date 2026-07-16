@@ -91,17 +91,21 @@ class BrainAIRuntime:
         entity_id = entity_record["id"] if entity_record else None
         by_component: dict[str, list[dict]] = {}
         if "ATL" in route:
-            semantic_results = self.semantic.search(query, limit)
-            if entity_id:
-                semantic_results = [
-                    result
-                    for result in semantic_results
-                    if "entity_ids" in result
-                    and (
-                        not result["entity_ids"]
-                        or entity_id in result["entity_ids"]
-                    )
-                ]
+            semantic_results = self.semantic.search(
+                query,
+                limit,
+                entity_id=entity_id,
+            )
+            if entity_id and not getattr(self.semantic, "includes_local_store", False):
+                # External vault adapters cannot prove a Brain-AI entity
+                # binding. Preserve authoritative project-scoped local memory
+                # even when an external ATL backend is configured.
+                local_results = self.store.search_knowledge(
+                    query,
+                    limit,
+                    entity_id=entity_id,
+                )
+                semantic_results = (local_results + semantic_results)[:limit]
             by_component["ATL"] = semantic_results
         if "HC" in route:
             by_component["HC"] = self.store.search_events(query, limit, entity_id=entity_id)
@@ -266,6 +270,71 @@ class BrainAIRuntime:
         self.store.append_audit({"event": "checkpoint", **record})
         return record
 
+    def handoff(
+        self,
+        entity: str,
+        *,
+        summary: str = "",
+        next_actions: list[str] | None = None,
+    ) -> dict:
+        """Write a project-scoped checkpoint for a later session."""
+        record_entity = self.store.get_entity(entity)
+        entity_id = record_entity["id"]
+        pending = [
+            event["id"]
+            for event in self.store.events()
+            if event.get("promote_to") and entity_id in event.get("entity_ids", [])
+        ]
+        record = {
+            "id": new_id("handoff"),
+            "kind": "entity-handoff",
+            "entity": {
+                "id": entity_id,
+                "name": record_entity["name"],
+                "type": record_entity["type"],
+            },
+            "summary": summary.strip(),
+            "next_actions": [item.strip() for item in (next_actions or []) if item.strip()],
+            "counts": {
+                "episodic": sum(
+                    entity_id in item.get("entity_ids", []) for item in self.store.events()
+                ),
+                "semantic": sum(
+                    entity_id in item.get("entity_ids", []) for item in self.store.knowledge()
+                ),
+                "rules": sum(
+                    entity_id in item.get("entity_ids", []) for item in self.store.rules()
+                ),
+                "exact_state": len(self.store.states(entity_id, include_global=False)),
+            },
+            "pending_consolidation": pending,
+            "created_at": utc_now(),
+        }
+        self.store.append_checkpoint(record)
+        self.store.append_audit({"event": "entity_handoff", **record})
+        return record
+
+    def resume(self, entity: str) -> dict:
+        """Read the newest handoff for exactly one entity."""
+        record_entity = self.store.get_entity(entity)
+        for checkpoint in reversed(self.store.checkpoints(100_000)):
+            if (
+                checkpoint.get("kind") == "entity-handoff"
+                and checkpoint.get("entity", {}).get("id") == record_entity["id"]
+            ):
+                return checkpoint
+        return {
+            "kind": "entity-handoff",
+            "status": "not_found",
+            "entity": {
+                "id": record_entity["id"],
+                "name": record_entity["name"],
+                "type": record_entity["type"],
+            },
+            "summary": "",
+            "next_actions": [],
+        }
+
     def consolidate(self, *, apply: bool = False) -> dict:
         candidates = []
         for event in self.store.events():
@@ -311,19 +380,36 @@ class BrainAIRuntime:
         *,
         source: str = "user",
         tags: list[str] | None = None,
+        entity: str | None = None,
     ) -> dict:
         old = self.store.get_knowledge(old_id)
-        created = self.store.put_knowledge(
-            new_text,
-            source=source,
-            tags=tags or old.get("tags", []),
-            supersedes=old_id,
-            entities=old.get("entity_ids", []),
-        )
+        selected_entity = entity
+        if not selected_entity and old.get("entity_ids"):
+            if len(old["entity_ids"]) != 1:
+                raise ValueError(
+                    "entity is required when superseding knowledge shared by multiple scopes"
+                )
+            selected_entity = old["entity_ids"][0]
+        if selected_entity:
+            created = self.store.supersede_knowledge_for_entity(
+                old_id,
+                new_text,
+                selected_entity,
+                source=source,
+                tags=tags or old.get("tags", []),
+            )
+        else:
+            created = self.store.put_knowledge(
+                new_text,
+                source=source,
+                tags=tags or old.get("tags", []),
+                supersedes=old_id,
+            )
         result = {
             "old_id": old_id,
             "new_id": created["id"],
             "status": "superseded",
+            "entity": selected_entity,
             "created_at": utc_now(),
         }
         self.store.append_audit({"event": "reconsolidation", **result})

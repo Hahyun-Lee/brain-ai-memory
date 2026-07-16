@@ -21,18 +21,27 @@ SKIP_VAULT_DIRS = {".git", ".obsidian", ".smart-env", ".trash", "node_modules"}
 
 class LocalSemanticAdapter:
     name = "local-bm25"
+    includes_local_store = True
 
     def __init__(self, store: MemoryStore):
         self.store = store
 
-    def search(self, query: str, limit: int = 5) -> list[dict]:
-        return self.store.search_knowledge(query, limit)
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        *,
+        entity_id: str | None = None,
+    ) -> list[dict]:
+        """Rank only records that are valid for the requested entity scope."""
+        return self.store.search_knowledge(query, limit, entity_id=entity_id)
 
 
 class VaultBM25Adapter:
     """Fast, model-free vault fallback that also sees plugin-unindexed notes."""
 
     name = "vault-bm25"
+    includes_local_store = False
 
     def __init__(self, vault_path: str | Path):
         self.vault_path = Path(vault_path).expanduser().resolve()
@@ -49,25 +58,40 @@ class VaultBM25Adapter:
             if any(part in SKIP_VAULT_DIRS or part.startswith(".") for part in relative.parts[:-1]):
                 continue
             try:
-                if path.stat().st_size > 2_000_000:
+                if path.is_symlink():
                     continue
-                content = path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
+                canonical = path.resolve(strict=True)
+                canonical.relative_to(self.vault_path)
+                if not canonical.is_file() or canonical.stat().st_size > 2_000_000:
+                    continue
+                content = canonical.read_text(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
                 continue
             documents.append(
                 {
                     "id": f"vault:{relative.as_posix()}",
                     "path": relative.as_posix(),
                     "text": content,
-                    "source": str(path),
+                    "source": str(canonical),
                     "component": "ATL",
                     "kind": "semantic",
                     "backend": self.name,
+                    # A vault path is not a Brain-AI entity binding. Scoped
+                    # recall must not present this hit as project-verified.
+                    "entity_scope": "unscoped-external",
                 }
             )
         return documents
 
-    def search(self, query: str, limit: int = 5) -> list[dict]:
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        *,
+        entity_id: str | None = None,
+    ) -> list[dict]:
+        if entity_id is not None:
+            return []
         return ranked(self._documents(), query, limit=limit)
 
 
@@ -199,6 +223,7 @@ class SmartConnectionsAdapter:
     """
 
     name = "smart-connections-hybrid"
+    includes_local_store = False
 
     def __init__(
         self,
@@ -277,13 +302,14 @@ class SmartConnectionsAdapter:
                 if not note_text and full_path.is_file():
                     note_text = full_path.read_text(encoding="utf-8", errors="replace")[:4_000]
             except (OSError, ValueError):
-                note_text = ""
+                continue
             hits.append(
                 {
                     "id": f"vault:{note_path}", "path": note_path,
                     "text": note_text, "source": str(full_path),
                     "score": float(item.get("similarity", item.get("score", 1 / (position + 1)))),
                     "component": "ATL", "kind": "semantic", "backend": "smart-connections-mcp",
+                    "entity_scope": "unscoped-external",
                     "vault": item.get("vault"), "scope": item.get("scope"),
                     "block": item.get("block"), "retrieval": item.get("retrieval", []),
                     "score_type": item.get("scoreType"),
@@ -297,7 +323,25 @@ class SmartConnectionsAdapter:
         }
         return hits
 
-    def search(self, query: str, limit: int = 5) -> list[dict]:
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        *,
+        entity_id: str | None = None,
+    ) -> list[dict]:
+        if entity_id is not None:
+            # Smart Connections returns vault-note scope, not a verified
+            # Brain-AI entity binding. Avoid starting the external backend for
+            # a request whose results cannot satisfy the requested scope.
+            self.last_diagnostic = {
+                "mcp": "skipped",
+                "scope": "entity-scoped",
+                "entity_id": entity_id,
+                "reason": "external hits have no Brain-AI entity binding",
+                "returned": 0,
+            }
+            return []
         started = time.perf_counter()
         mcp_hits: list[dict] = []
         error = None

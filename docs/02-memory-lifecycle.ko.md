@@ -121,7 +121,9 @@ rollout adapter가 없습니다. 연결하는 host 또는 custom adapter가 poli
   runtime이 provider transcript에서 이를 추론하지 않습니다.
 - **Session 종료(consolidation과 handoff).** Host가 `brain-ai consolidate`를
   preview하고 승인 후에만 apply하며, durable handoff를 위해
-  `brain_checkpoint` 또는 `brain-ai checkpoint`를 호출합니다. 이는 working
+  explicit/default entity가 있는 `brain_checkpoint` 또는
+  `brain-ai handoff --entity ...`를 호출합니다. 기존 `brain-ai checkpoint`는 global summary만
+  기록합니다. 이는 working
   memory 전체가 자동 이동하는 것이 아니라 명시적인 integration sequence입니다.
 
 흔한 실패는 explicit write를 건너뛰고 session 종료 시 내용을 재구성하려는

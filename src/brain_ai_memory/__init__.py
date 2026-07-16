@@ -1,6 +1,6 @@
-"""Brain-AI Memory public reference runtime."""
+"""Brain-AI Memory local memory-management runtime."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from .runtime import BrainAIRuntime
 

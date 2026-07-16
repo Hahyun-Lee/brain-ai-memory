@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brain-ai-memory"
-version = "0.4.0"
-description = "Local, inspectable reference kernel for typed agent memory management"
+version = "0.5.0"
+description = "Project-scoped, versioned memory for AI agents that work across sessions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -31,7 +31,10 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
 ]
-dependencies = ["PyYAML>=6.0,<7"]
+dependencies = [
+  "PyYAML>=6.0,<7",
+  "tomli>=2.0,<3; python_version < '3.11'",
+]
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.2.0,<2"]

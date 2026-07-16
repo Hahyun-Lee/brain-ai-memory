@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use Brain-AI Memory in research or an agent system, please cite this repository."
-title: "Brain-AI Memory: An Installable Reference Kernel for Typed Agent Memory Management"
+title: "Brain-AI Memory: Local Memory Management for AI Agents Across Sessions"
 type: software
 authors:
   - family-names: Lee
@@ -8,5 +8,5 @@ authors:
 repository-code: "https://github.com/Hahyun-Lee/brain-ai-memory"
 url: "https://github.com/Hahyun-Lee/brain-ai-memory"
 license: MIT
-version: 0.4.0
-date-released: 2026-07-15
+version: 0.5.0
+date-released: 2026-07-16

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .config import write_default_config
+from .privacy import create_private_file, ensure_private_directory, open_private_append
 from .text import ranked
 
 
@@ -39,10 +40,11 @@ class MemoryStore:
         self.checkpoints_path = home / "checkpoints.jsonl"
 
     def initialize(self) -> None:
-        self.home.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(self.home)
         write_default_config(self.home)
         for path in (self.events_path, self.audit_path, self.checkpoints_path):
-            path.touch(exist_ok=True)
+            create_private_file(path)
+        create_private_file(self.db_path)
         with self.connect() as conn:
             conn.executescript(
                 """
@@ -53,6 +55,7 @@ class MemoryStore:
                     tags_json TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'active',
                     content_hash TEXT NOT NULL UNIQUE,
+                    global_scope INTEGER NOT NULL DEFAULT 1,
                     supersedes TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -128,10 +131,281 @@ class MemoryStore:
                     PRIMARY KEY(entity_id, key),
                     FOREIGN KEY(entity_id) REFERENCES entities(id)
                 );
+                CREATE TABLE IF NOT EXISTS imported_events (
+                    id TEXT PRIMARY KEY,
+                    text TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    tags_json TEXT NOT NULL,
+                    promote_to TEXT,
+                    rule_pattern TEXT,
+                    entity_ids_json TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS import_batches (
+                    id TEXT PRIMARY KEY,
+                    review_id TEXT NOT NULL,
+                    audit_id TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    source_path TEXT NOT NULL,
+                    source_sha256 TEXT NOT NULL,
+                    before_revision TEXT NOT NULL,
+                    after_revision TEXT,
+                    status TEXT NOT NULL,
+                    result_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    rolled_back_at TEXT
+                );
+                CREATE TABLE IF NOT EXISTS import_ledger (
+                    id TEXT PRIMARY KEY,
+                    entry_fingerprint TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    decision_digest TEXT NOT NULL,
+                    batch_id TEXT NOT NULL,
+                    source_path TEXT NOT NULL,
+                    source_sha256 TEXT NOT NULL,
+                    fragment_sha256 TEXT NOT NULL,
+                    line_start INTEGER NOT NULL,
+                    line_end INTEGER NOT NULL,
+                    memory_type TEXT NOT NULL,
+                    target_id TEXT,
+                    status TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(batch_id) REFERENCES import_batches(id),
+                    FOREIGN KEY(entity_id) REFERENCES entities(id)
+                );
                 """
             )
+            knowledge_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(knowledge)")
+            }
+            if "global_scope" not in knowledge_columns:
+                conn.execute(
+                    "ALTER TABLE knowledge ADD COLUMN global_scope INTEGER NOT NULL DEFAULT 1"
+                )
+                conn.execute(
+                    """UPDATE knowledge SET global_scope = 0
+                    WHERE EXISTS (
+                        SELECT 1 FROM memory_entities me
+                        WHERE me.target_type = 'semantic' AND me.target_id = knowledge.id
+                    )"""
+                )
+
+            ledger_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(import_ledger)")
+            }
+            if "entry_fingerprint" not in ledger_columns:
+                conn.execute("ALTER TABLE import_ledger RENAME TO import_ledger_legacy")
+                conn.execute(
+                    """CREATE TABLE import_ledger (
+                        id TEXT PRIMARY KEY,
+                        entry_fingerprint TEXT NOT NULL,
+                        entity_id TEXT NOT NULL,
+                        decision_digest TEXT NOT NULL,
+                        batch_id TEXT NOT NULL,
+                        source_path TEXT NOT NULL,
+                        source_sha256 TEXT NOT NULL,
+                        fragment_sha256 TEXT NOT NULL,
+                        line_start INTEGER NOT NULL,
+                        line_end INTEGER NOT NULL,
+                        memory_type TEXT NOT NULL,
+                        target_id TEXT,
+                        status TEXT NOT NULL,
+                        payload_json TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY(batch_id) REFERENCES import_batches(id),
+                        FOREIGN KEY(entity_id) REFERENCES entities(id)
+                    )"""
+                )
+                conn.execute(
+                    """INSERT INTO import_ledger
+                    (id, entry_fingerprint, entity_id, decision_digest, batch_id,
+                     source_path, source_sha256, fragment_sha256, line_start,
+                     line_end, memory_type, target_id, status, payload_json, created_at)
+                    SELECT l.fingerprint, l.fingerprint, b.entity_id,
+                           'legacy:' || l.memory_type, l.batch_id, l.source_path,
+                           l.source_sha256, l.fragment_sha256, l.line_start,
+                           l.line_end, l.memory_type, l.target_id, l.status,
+                           l.payload_json, l.created_at
+                    FROM import_ledger_legacy l
+                    JOIN import_batches b ON b.id = l.batch_id"""
+                )
+                conn.execute("DROP TABLE import_ledger_legacy")
+            conn.execute("DROP INDEX IF EXISTS idx_import_ledger_batch")
+            conn.execute(
+                "CREATE INDEX idx_import_ledger_batch ON import_ledger(batch_id, status)"
+            )
+            conn.execute(
+                """CREATE UNIQUE INDEX IF NOT EXISTS idx_import_ledger_active
+                ON import_ledger(entry_fingerprint, entity_id, decision_digest)
+                WHERE status = 'active'"""
+            )
+            legacy_review_unique = False
+            for index in conn.execute("PRAGMA index_list(import_batches)"):
+                if index["origin"] != "u":
+                    continue
+                columns = [
+                    row["name"]
+                    for row in conn.execute(
+                        f"PRAGMA index_info({json.dumps(index['name'])})"
+                    )
+                ]
+                if columns == ["review_id"]:
+                    legacy_review_unique = True
+                    break
+            if legacy_review_unique:
+                conn.commit()
+                conn.execute("PRAGMA foreign_keys = OFF")
+                try:
+                    conn.executescript(
+                        """
+                        BEGIN IMMEDIATE;
+                        CREATE TABLE import_batches_new (
+                            id TEXT PRIMARY KEY,
+                            review_id TEXT NOT NULL,
+                            audit_id TEXT NOT NULL,
+                            entity_id TEXT NOT NULL,
+                            source_path TEXT NOT NULL,
+                            source_sha256 TEXT NOT NULL,
+                            before_revision TEXT NOT NULL,
+                            after_revision TEXT,
+                            status TEXT NOT NULL,
+                            result_json TEXT NOT NULL,
+                            created_at TEXT NOT NULL,
+                            rolled_back_at TEXT
+                        );
+                        INSERT INTO import_batches_new
+                        SELECT * FROM import_batches;
+                        DROP TABLE import_batches;
+                        ALTER TABLE import_batches_new RENAME TO import_batches;
+                        COMMIT;
+                        """
+                    )
+                except Exception:
+                    conn.rollback()
+                    raise
+                finally:
+                    conn.execute("PRAGMA foreign_keys = ON")
+                violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+                if violations:
+                    raise RuntimeError("import batch migration violated foreign keys")
+            conn.execute(
+                """CREATE UNIQUE INDEX IF NOT EXISTS idx_import_batches_current_review
+                ON import_batches(review_id)
+                WHERE status IN ('applying', 'applied')"""
+            )
+            conn.execute(
+                """CREATE INDEX IF NOT EXISTS idx_import_batches_review_history
+                ON import_batches(review_id, created_at)"""
+            )
+            lineage_table_preexisting = conn.execute(
+                """SELECT 1 FROM sqlite_master
+                WHERE type = 'table' AND name = 'knowledge_supersessions'"""
+            ).fetchone() is not None
+            conn.commit()
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    """CREATE TABLE IF NOT EXISTS import_dependencies (
+                    id TEXT PRIMARY KEY,
+                    dependent_batch_id TEXT NOT NULL,
+                    provider_ledger_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(dependent_batch_id, provider_ledger_id),
+                    FOREIGN KEY(dependent_batch_id) REFERENCES import_batches(id),
+                    FOREIGN KEY(provider_ledger_id) REFERENCES import_ledger(id)
+                    )"""
+                )
+                conn.execute(
+                    """CREATE INDEX IF NOT EXISTS idx_import_dependencies_provider
+                    ON import_dependencies(provider_ledger_id, dependent_batch_id)"""
+                )
+                conn.execute(
+                    """CREATE TABLE IF NOT EXISTS knowledge_supersessions (
+                    id TEXT PRIMARY KEY,
+                    old_id TEXT NOT NULL,
+                    replacement_id TEXT NOT NULL,
+                    entity_id TEXT,
+                    source TEXT NOT NULL,
+                    batch_id TEXT,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    created_at TEXT NOT NULL,
+                    rolled_back_at TEXT,
+                    FOREIGN KEY(old_id) REFERENCES knowledge(id),
+                    FOREIGN KEY(replacement_id) REFERENCES knowledge(id),
+                    FOREIGN KEY(entity_id) REFERENCES entities(id),
+                    FOREIGN KEY(batch_id) REFERENCES import_batches(id)
+                    )"""
+                )
+                conn.execute(
+                    """CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_supersessions_global_active
+                    ON knowledge_supersessions(old_id)
+                    WHERE entity_id IS NULL AND status = 'active'"""
+                )
+                conn.execute(
+                    """CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_supersessions_scoped_active
+                    ON knowledge_supersessions(old_id, entity_id)
+                    WHERE entity_id IS NOT NULL AND status = 'active'"""
+                )
+                conn.execute(
+                    """CREATE INDEX IF NOT EXISTS idx_knowledge_supersessions_replacement
+                    ON knowledge_supersessions(replacement_id, status)"""
+                )
+                if not lineage_table_preexisting:
+                    legacy_rows = conn.execute(
+                        """SELECT replacement.id AS replacement_id,
+                                  replacement.supersedes AS old_id,
+                                  replacement.status AS replacement_status,
+                                  replacement.created_at,
+                                  replacement.updated_at
+                        FROM knowledge replacement
+                        JOIN knowledge old ON old.id = replacement.supersedes
+                        WHERE replacement.supersedes IS NOT NULL
+                          AND replacement.id != replacement.supersedes
+                        ORDER BY replacement.supersedes,
+                                 CASE WHEN replacement.status = 'active' THEN 0 ELSE 1 END,
+                                 replacement.updated_at DESC,
+                                 replacement.created_at DESC,
+                                 replacement.id"""
+                    ).fetchall()
+                    selected_old_ids: set[str] = set()
+                    for row in legacy_rows:
+                        old_id = row["old_id"]
+                        replacement_id = row["replacement_id"]
+                        digest = hashlib.sha256(
+                            f"legacy-v0.4\0{old_id}\0{replacement_id}".encode("utf-8")
+                        ).hexdigest()
+                        status = (
+                            "active"
+                            if old_id not in selected_old_ids
+                            else "legacy_conflict"
+                        )
+                        selected_old_ids.add(old_id)
+                        conn.execute(
+                            """INSERT INTO knowledge_supersessions
+                            (id, old_id, replacement_id, entity_id, source,
+                             batch_id, status, created_at, rolled_back_at)
+                            VALUES (?, ?, ?, NULL, ?, NULL, ?, ?, NULL)""",
+                            (
+                                f"sup_{digest[:12]}",
+                                old_id,
+                                replacement_id,
+                                "migration:v0.5:legacy-knowledge.supersedes",
+                                status,
+                                row["created_at"],
+                            ),
+                        )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
+        ignore_path = self.home / ".gitignore"
+        create_private_file(ignore_path, b"*\n")
 
     def connect(self) -> sqlite3.Connection:
+        create_private_file(self.db_path)
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -139,8 +413,10 @@ class MemoryStore:
 
     @staticmethod
     def _append_jsonl(path: Path, record: dict) -> None:
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+        payload = (json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
+        with open_private_append(path) as handle:
+            handle.write(payload)
+            handle.flush()
 
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict]:
@@ -330,6 +606,17 @@ class MemoryStore:
             "created_at": utc_now(),
         }
         with self.connect() as conn:
+            if target_type == "semantic":
+                existing = conn.execute(
+                    "SELECT id FROM knowledge WHERE id = ?", (target_id,)
+                ).fetchone()
+                if not existing:
+                    raise KeyError(f"unknown knowledge id: {target_id}")
+                conn.execute(
+                    """UPDATE knowledge SET global_scope = 0, updated_at = ?
+                    WHERE id = ?""",
+                    (record["created_at"], target_id),
+                )
             conn.execute(
                 """INSERT OR IGNORE INTO memory_entities
                 (target_type, target_id, entity_id, role, created_at)
@@ -380,6 +667,19 @@ class MemoryStore:
 
     def events(self, include_inactive: bool = False) -> list[dict]:
         records = self._read_jsonl(self.events_path)
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM imported_events ORDER BY created_at"
+            ).fetchall()
+        for row in rows:
+            record = dict(row)
+            record["tags"] = json.loads(record.pop("tags_json"))
+            record["entity_ids"] = json.loads(record.pop("entity_ids_json"))
+            record["type"] = "episodic"
+            status = record.pop("status")
+            if include_inactive or status == "active":
+                records.append(record)
+        records.sort(key=lambda item: item.get("created_at", ""))
         if include_inactive:
             return records
         inactive = self._inactive_ids("episodic")
@@ -410,38 +710,104 @@ class MemoryStore:
         clean = text.strip()
         if not clean:
             raise ValueError("knowledge text is required")
+        entity_refs = list(entities)
+        if supersedes and entity_refs:
+            raise ValueError(
+                "scoped supersession requires supersede_knowledge_for_entity"
+            )
+        entity_ids = list(
+            dict.fromkeys(self.get_entity(reference)["id"] for reference in entity_refs)
+        )
         digest = hashlib.sha256(clean.encode("utf-8")).hexdigest()
         now = utc_now()
+        existing_id: str | None = None
+        existing_is_global = False
         with self.connect() as conn:
+            if supersedes:
+                old = conn.execute(
+                    "SELECT id, status, global_scope FROM knowledge WHERE id = ?",
+                    (supersedes,),
+                ).fetchone()
+                if not old or old["status"] != "active":
+                    raise ValueError(f"supersession target is not active: {supersedes}")
+                if not old["global_scope"]:
+                    raise ValueError(
+                        "project-scoped supersession requires "
+                        "supersede_knowledge_for_entity"
+                    )
             existing = conn.execute("SELECT * FROM knowledge WHERE content_hash = ?", (digest,)).fetchone()
             if existing:
-                record = self._knowledge_row(existing)
-                for entity in entities:
-                    self.link_entity("semantic", record["id"], entity)
-                record["entity_ids"] = [
-                    link["entity_id"] for link in self.entity_links("semantic", record["id"])
-                ]
-                return record
-            record_id = new_id("mem")
-            conn.execute(
-                """INSERT INTO knowledge
-                (id, text, source, tags_json, status, content_hash, supersedes, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)""",
-                (record_id, clean, source, json.dumps(sorted(set(tags)), ensure_ascii=False), digest, supersedes, now, now),
-            )
-            if supersedes:
+                existing_id = existing["id"]
+                existing_is_global = bool(existing["global_scope"])
+                if supersedes == existing_id:
+                    raise ValueError("replacement knowledge is identical to the target")
+                if not entity_refs and not existing["global_scope"]:
+                    raise ValueError(
+                        "identical semantic memory is project-scoped; pass an entity "
+                        "instead of widening it to global scope"
+                    )
+                if supersedes:
+                    conn.execute(
+                        """UPDATE knowledge SET status = 'active',
+                        supersedes = COALESCE(supersedes, ?), updated_at = ?
+                        WHERE id = ?""",
+                        (supersedes, now, existing_id),
+                    )
+                    conn.execute(
+                        """UPDATE knowledge SET status = 'superseded', updated_at = ?
+                        WHERE id = ?""",
+                        (now, supersedes),
+                    )
+            else:
+                record_id = new_id("mem")
                 conn.execute(
-                    "UPDATE knowledge SET status = 'superseded', updated_at = ? WHERE id = ?",
-                    (now, supersedes),
+                    """INSERT INTO knowledge
+                    (id, text, source, tags_json, status, content_hash, global_scope,
+                     supersedes, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)""",
+                    (
+                        record_id,
+                        clean,
+                        source,
+                        json.dumps(sorted(set(tags)), ensure_ascii=False),
+                        digest,
+                        0 if entity_refs else 1,
+                        supersedes,
+                        now,
+                        now,
+                    ),
                 )
-        for entity in entities:
-            self.link_entity("semantic", record_id, entity)
+                if supersedes:
+                    conn.execute(
+                        "UPDATE knowledge SET status = 'superseded', updated_at = ? WHERE id = ?",
+                        (now, supersedes),
+                    )
+            replacement_id = existing_id or record_id
+            if supersedes:
+                self._record_knowledge_supersession(
+                    conn,
+                    old_id=supersedes,
+                    replacement_id=replacement_id,
+                    entity_id=None,
+                    source=source,
+                    created_at=now,
+                )
+            if not existing_is_global:
+                for entity_id in entity_ids:
+                    conn.execute(
+                        """INSERT OR IGNORE INTO memory_entities
+                        (target_type, target_id, entity_id, role, created_at)
+                        VALUES ('semantic', ?, ?, 'about', ?)""",
+                        (replacement_id, entity_id, now),
+                    )
+        record_id = existing_id or record_id
         return self.get_knowledge(record_id)
 
     @staticmethod
     def _knowledge_row(row: sqlite3.Row) -> dict:
         record = dict(row)
         record["tags"] = json.loads(record.pop("tags_json"))
+        record.pop("global_scope", None)
         return record
 
     def get_knowledge(self, record_id: str) -> dict:
@@ -453,12 +819,222 @@ class MemoryStore:
         record["entity_ids"] = [
             link["entity_id"] for link in self.entity_links("semantic", record_id)
         ]
+        record["supersession_edges"] = self.knowledge_supersessions(
+            replacement_id=record_id
+        )
+        record["supersedes_ids"] = [
+            edge["old_id"] for edge in record["supersession_edges"]
+        ]
         return record
 
-    def knowledge(self, include_inactive: bool = False) -> list[dict]:
-        where = "" if include_inactive else "WHERE status = 'active'"
+    def _record_knowledge_supersession(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        old_id: str,
+        replacement_id: str,
+        entity_id: str | None,
+        source: str,
+        created_at: str,
+        batch_id: str | None = None,
+    ) -> dict:
+        scope_clause = "entity_id IS NULL" if entity_id is None else "entity_id = ?"
+        parameters: tuple[str, ...] = (old_id,) if entity_id is None else (old_id, entity_id)
+        existing = conn.execute(
+            f"""SELECT * FROM knowledge_supersessions
+            WHERE old_id = ? AND {scope_clause} AND status = 'active'""",
+            parameters,
+        ).fetchone()
+        if existing:
+            if existing["replacement_id"] != replacement_id:
+                raise ValueError(
+                    "supersession scope already has a different active replacement"
+                )
+            return dict(existing)
+        record = {
+            "id": new_id("sup"),
+            "old_id": old_id,
+            "replacement_id": replacement_id,
+            "entity_id": entity_id,
+            "source": source,
+            "batch_id": batch_id,
+            "status": "active",
+            "created_at": created_at,
+            "rolled_back_at": None,
+        }
+        conn.execute(
+            """INSERT INTO knowledge_supersessions
+            (id, old_id, replacement_id, entity_id, source, batch_id, status,
+             created_at, rolled_back_at)
+            VALUES (:id, :old_id, :replacement_id, :entity_id, :source,
+                    :batch_id, :status, :created_at, :rolled_back_at)""",
+            record,
+        )
+        return record
+
+    def knowledge_supersessions(
+        self,
+        *,
+        old_id: str | None = None,
+        replacement_id: str | None = None,
+        entity_id: str | None = None,
+        include_inactive: bool = False,
+    ) -> list[dict]:
+        clauses: list[str] = []
+        parameters: list[str] = []
+        if old_id:
+            clauses.append("old_id = ?")
+            parameters.append(old_id)
+        if replacement_id:
+            clauses.append("replacement_id = ?")
+            parameters.append(replacement_id)
+        if entity_id:
+            clauses.append("entity_id = ?")
+            parameters.append(entity_id)
+        if not include_inactive:
+            clauses.append("status = 'active'")
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self.connect() as conn:
-            rows = conn.execute(f"SELECT * FROM knowledge {where} ORDER BY created_at").fetchall()
+            rows = conn.execute(
+                f"SELECT * FROM knowledge_supersessions {where} ORDER BY created_at, id",
+                parameters,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def supersede_knowledge_for_entity(
+        self,
+        old_id: str,
+        new_text: str,
+        entity: str,
+        *,
+        source: str = "user",
+        tags: Iterable[str] = (),
+    ) -> dict:
+        """Replace one entity's fact without changing other entity scopes."""
+        clean = new_text.strip()
+        if not clean:
+            raise ValueError("replacement knowledge text is required")
+        entity_id = self.get_entity(entity)["id"]
+        content_hash = hashlib.sha256(clean.encode("utf-8")).hexdigest()
+        now = utc_now()
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            old = conn.execute(
+                """SELECT id, status, global_scope FROM knowledge WHERE id = ?""",
+                (old_id,),
+            ).fetchone()
+            if not old or old["status"] != "active":
+                conn.rollback()
+                raise ValueError(f"supersession target is not active: {old_id}")
+            if old["global_scope"]:
+                conn.rollback()
+                raise ValueError("entity-scoped supersession cannot replace global memory")
+            linked = conn.execute(
+                """SELECT 1 FROM memory_entities
+                WHERE target_type = 'semantic' AND target_id = ? AND entity_id = ?""",
+                (old_id, entity_id),
+            ).fetchone()
+            if not linked:
+                conn.rollback()
+                raise ValueError("supersession target is not linked to the selected entity")
+            existing = conn.execute(
+                """SELECT id, status, global_scope FROM knowledge
+                WHERE content_hash = ?""",
+                (content_hash,),
+            ).fetchone()
+            if existing and existing["id"] == old_id:
+                conn.rollback()
+                raise ValueError("replacement knowledge is identical to the target")
+            if existing:
+                if existing["status"] != "active":
+                    conn.rollback()
+                    raise ValueError(
+                        "identical replacement knowledge exists but is inactive"
+                    )
+                replacement_id = existing["id"]
+                replacement_is_global = bool(existing["global_scope"])
+                conn.execute(
+                    """UPDATE knowledge SET supersedes = COALESCE(supersedes, ?),
+                    updated_at = ? WHERE id = ?""",
+                    (old_id, now, replacement_id),
+                )
+            else:
+                replacement_id = new_id("mem")
+                conn.execute(
+                    """INSERT INTO knowledge
+                    (id, text, source, tags_json, status, content_hash,
+                     global_scope, supersedes, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 'active', ?, 0, ?, ?, ?)""",
+                    (
+                        replacement_id,
+                        clean,
+                        source,
+                        json.dumps(sorted(set(tags)), ensure_ascii=False),
+                        content_hash,
+                        old_id,
+                        now,
+                        now,
+                    ),
+                )
+                replacement_is_global = False
+            conn.execute(
+                """DELETE FROM memory_entities
+                WHERE target_type = 'semantic' AND target_id = ? AND entity_id = ?""",
+                (old_id, entity_id),
+            )
+            remaining = conn.execute(
+                """SELECT COUNT(*) FROM memory_entities
+                WHERE target_type = 'semantic' AND target_id = ?""",
+                (old_id,),
+            ).fetchone()[0]
+            if not remaining:
+                conn.execute(
+                    """UPDATE knowledge SET status = 'superseded', updated_at = ?
+                    WHERE id = ?""",
+                    (now, old_id),
+                )
+            if not replacement_is_global:
+                conn.execute(
+                    """INSERT OR IGNORE INTO memory_entities
+                    (target_type, target_id, entity_id, role, created_at)
+                    VALUES ('semantic', ?, ?, 'about', ?)""",
+                    (replacement_id, entity_id, now),
+                )
+            self._record_knowledge_supersession(
+                conn,
+                old_id=old_id,
+                replacement_id=replacement_id,
+                entity_id=entity_id,
+                source=source,
+                created_at=now,
+            )
+            conn.commit()
+        return self.get_knowledge(replacement_id)
+
+    def knowledge(
+        self,
+        include_inactive: bool = False,
+        entity_id: str | None = None,
+    ) -> list[dict]:
+        clauses = []
+        params: list[str] = []
+        if not include_inactive:
+            clauses.append("status = 'active'")
+        if entity_id:
+            clauses.append(
+                """(global_scope = 1 OR EXISTS (
+                    SELECT 1 FROM memory_entities me
+                    WHERE me.target_type = 'semantic'
+                      AND me.target_id = knowledge.id
+                      AND me.entity_id = ?
+                ))"""
+            )
+            params.append(entity_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM knowledge {where} ORDER BY created_at", params
+            ).fetchall()
         records = []
         for row in rows:
             record = self._knowledge_row(row)
@@ -469,12 +1045,7 @@ class MemoryStore:
         return records
 
     def search_knowledge(self, query: str, limit: int = 5, entity_id: str | None = None) -> list[dict]:
-        records = self.knowledge()
-        if entity_id:
-            records = [
-                record for record in records
-                if not record.get("entity_ids") or entity_id in record.get("entity_ids", [])
-            ]
+        records = self.knowledge(entity_id=entity_id)
         results = ranked(records, query, limit=limit)
         for result in results:
             result["component"] = "ATL"
@@ -497,6 +1068,9 @@ class MemoryStore:
             raise ValueError("rule reason is required")
         import re
         re.compile(pattern)
+        entity_ids = list(
+            dict.fromkeys(self.get_entity(reference)["id"] for reference in entities)
+        )
         record = {
             "id": new_id("rule"), "pattern": pattern, "effect": effect,
             "reason": reason.strip(), "source": source, "enabled": 1,
@@ -507,8 +1081,13 @@ class MemoryStore:
                 "INSERT INTO rules (id, pattern, effect, reason, source, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 tuple(record[key] for key in ("id", "pattern", "effect", "reason", "source", "enabled", "created_at")),
             )
-        for entity in entities:
-            self.link_entity("rule", record["id"], entity)
+            for entity_id in entity_ids:
+                conn.execute(
+                    """INSERT OR IGNORE INTO memory_entities
+                    (target_type, target_id, entity_id, role, created_at)
+                    VALUES ('rule', ?, ?, 'about', ?)""",
+                    (record["id"], entity_id, record["created_at"]),
+                )
         record["entity_ids"] = [
             link["entity_id"] for link in self.entity_links("rule", record["id"])
         ]

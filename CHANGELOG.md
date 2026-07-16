@@ -1,6 +1,71 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-07-16
+
+### Added
+
+- a source-addressed Markdown adoption workflow: `audit`, `review`, `apply`,
+  and recoverable `rollback`;
+- deterministic exact-duplicate and explicit key/value conflict candidates,
+  without inferring which statement is true or current;
+- an idempotent import ledger that retains file, line-range, fragment, and
+  source hashes for every approved semantic, episodic, exact-state, rule, or
+  supersession decision;
+- project-scoped `handoff` and `resume` commands plus the `brain_resume` MCP
+  tool;
+- preview-first `connect` and `disconnect` commands for project or user Codex
+  and Claude Code MCP configuration;
+- an MCP default entity so host calls do not silently fall back to global
+  scope; and
+- explicit many-to-one supersession edges so a reused replacement retains
+  every old-record, entity, source, and import-batch lineage.
+
+### Safety
+
+- audit previews do not initialize the memory database, and saved audit/review
+  plans never rewrite their source Markdown;
+- apply requires an explicit reviewed allowlist and `--yes`, validates plan
+  integrity, and fails closed when either the source hash or logical store
+  revision has changed;
+- arbitrary Markdown prose cannot become an enabled rule or overwrite exact
+  state without a specific human decision;
+- import identity is entity-scoped, and rollback preserves unrelated entity
+  link roles and refuses to invalidate a later applied batch that still
+  depends on the same imported target;
+- rolled-back deterministic reviews can create a new immutable batch attempt
+  without overwriting the earlier receipt, and legacy single-attempt batch
+  tables migrate transactionally;
+- default Markdown discovery pins the validated in-project path and opens it
+  without following a swapped parent or leaf symbolic link, while explicit
+  paths open the canonical parent component-by-component;
+- entity scope is applied before semantic ranking and top-k; external vault
+  results without a verified entity binding remain explicitly unscoped;
+- newly created runtime directories and sensitive files use owner-only modes,
+  and `doctor` reports permissive existing stores;
+- supersession rollback retains its lineage edge as a logical tombstone and
+  restores the replacement's prior compatibility pointer;
+- v0.4 scalar supersession pointers migrate to explicit lineage edges without
+  duplicating them on restart, while ambiguous legacy branches remain visible
+  as migration conflicts;
+- runtime-home symlinks and non-regular artifacts are rejected, vault adapters
+  do not traverse links outside the configured root, and `doctor` verifies the
+  generated catch-all ignore rule as well as owner-only permissions;
+- managed Codex and Claude Code configuration is previewed with unrelated
+  values omitted, and supported POSIX platforms pin its parent directory
+  across read, compare, atomic replace, and verification; and
+- rollback is logical and evidence-preserving, not physical erasure.
+
+### Packaging
+
+- source distributions include the benchmark inputs required by their bundled
+  tests;
+- CI verifies the core runtime and adoption workflow on Python 3.10, 3.11, and 3.12, then
+  builds, checks, installs, and smoke-tests the wheel and source distribution;
+- the installed-wheel check now runs the public audit, review, apply, generated
+  MCP configuration, real stdio calls, checkpoint, fresh-process resume, and
+  entity-isolation path as one reproducible integration test; and
+- `brain-ai-mcp` exits with a concise installation hint when the optional MCP
+  dependency is absent.
 
 ## 0.4.0 — 2026-07-15
 

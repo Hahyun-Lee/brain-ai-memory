@@ -8,6 +8,25 @@ permissions:
   contents: read
 
 jobs:
+  compatibility:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install base package
+        run: python -m pip install .
+      - name: Test core runtime and adoption workflow
+        run: |
+          python -W error::ResourceWarning -m unittest discover -s tests -p "test_runtime.py" -v
+          python -W error::ResourceWarning -m unittest discover -s tests -p "test_workspace.py" -v
+
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -24,6 +43,8 @@ jobs:
           python -m py_compile \
             src/brain_ai_memory/*.py \
             tests/test_runtime.py \
+            tests/test_workspace.py \
+            tests/test_e2e.py \
             tests/test_component_ablation.py \
             benchmarks/run_component_ablation.py \
             benchmarks/plot_component_ablation.py \
@@ -136,3 +157,39 @@ jobs:
           for manifest in benchmarks/pilots/longmemeval-s-retrieval-20260714/*/manifest.json; do
             python benchmarks/validate_manifest.py "$manifest"
           done
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build and validate distributions
+        run: |
+          python -m pip install build twine
+          python -m build
+          python -m twine check dist/*
+      - name: Install and smoke-test the wheel
+        run: |
+          wheel="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.whl' -print -quit)"
+          python -m venv /tmp/brain-ai-wheel
+          /tmp/brain-ai-wheel/bin/python -m pip install "$wheel[mcp]"
+          cd /tmp
+          /tmp/brain-ai-wheel/bin/brain-ai --home /tmp/brain-ai-home init
+          /tmp/brain-ai-wheel/bin/brain-ai --home /tmp/brain-ai-home ontology
+          /tmp/brain-ai-wheel/bin/brain-ai \
+            audit "$GITHUB_WORKSPACE/templates/memory/MEMORY.skeleton.md" \
+            --entity wheel-smoke \
+            --no-save
+          /tmp/brain-ai-wheel/bin/python \
+            -W error::ResourceWarning "$GITHUB_WORKSPACE/tests/test_e2e.py" -v
+      - name: Test the self-contained source distribution
+        run: |
+          sdist="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          mkdir -p /tmp/brain-ai-sdist
+          tar -xzf "$sdist" -C /tmp/brain-ai-sdist
+          source_dir="$(find /tmp/brain-ai-sdist -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cd "$source_dir"
+          PYTHONPATH=src /tmp/brain-ai-wheel/bin/python \
+            -W error::ResourceWarning -m unittest discover -s tests -v

@@ -1,8 +1,12 @@
 # Examples
 
-Tiny, runnable worked cases. Each is a single file, depends only on the Python 3
+Tiny, runnable worked cases. Each is a single file, depends only on the Python
 standard library, and uses no real data. They exist to make the ideas in `docs/`
 concrete: you can read the doc, then run the example and watch the rule resolve.
+
+These files demonstrate guard and lifecycle concepts; they are not the package
+adoption flow. To try the installable runtime, use `brain-ai tour`. To bring in
+a real memory file, start with [Adopt an existing MEMORY.md](../README.md#adopt-an-existing-memorymd).
 
 ## Running them
 
@@ -13,7 +17,7 @@ python3 examples/01_guard_in_action.py
 python3 examples/02_lifecycle_decision.py
 ```
 
-(Any Python 3.7+ works.)
+Use Python 3.10+ to match the package requirement and compatibility CI.
 
 ## What each one shows
 

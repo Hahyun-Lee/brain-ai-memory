@@ -123,7 +123,9 @@ biological transfer mechanism.
   infer it from a provider transcript.
 - **Session end (consolidation and handoff).** The host previews
   `brain-ai consolidate`, applies it only after approval, and calls
-  `brain_checkpoint` (or `brain-ai checkpoint`) for a durable handoff. This is
+  `brain_checkpoint` with an explicit/default entity (or
+  `brain-ai handoff --entity ...`) for a durable scoped handoff. The legacy `brain-ai checkpoint`
+  writes only a global summary. This is
   an explicit integration sequence, not an automatic transfer of everything
   in working memory.
 

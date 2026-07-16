@@ -1,11 +1,11 @@
 # Contributing
 
-Thanks for considering it. This repo is an opinionated architecture plus a
-small installable reference runtime. Useful contributions include sharpening
-the mapping, improving a runtime or adapter contract, adding a reusable
-template or worked example, and reporting where the architecture breaks for
-your stack. Hosted-platform features and organization-specific wiring remain
-out of scope.
+Thanks for considering it. This repo is an installable, local memory-management
+layer plus the architecture and evidence behind it. Useful contributions
+include improving the adoption workflow, runtime or adapter contracts,
+sharpening the mapping, adding a reusable template or worked example, and
+reporting where the system breaks for your stack. Hosted-platform features and
+organization-specific wiring remain out of scope.
 
 ## The one hard rule: clean-room
 

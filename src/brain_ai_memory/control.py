@@ -59,7 +59,7 @@ code{{background:#eef0f5;padding:2px 5px;border-radius:4px}} footer{{color:var(-
 
 def serve(runtime: BrainAIRuntime, host: str = "127.0.0.1", port: int = 8765) -> None:
     class Handler(BaseHTTPRequestHandler):
-        server_version = "BrainAIObserver/0.3"
+        server_version = f"BrainAIObserver/{__version__}"
         sys_version = ""
 
         def log_message(self, format, *args):

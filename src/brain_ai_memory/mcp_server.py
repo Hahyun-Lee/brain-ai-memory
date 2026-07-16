@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from .runtime import BrainAIRuntime
+
+
+class MCPUnavailableError(RuntimeError):
+    """Raised when the optional MCP dependency is not installed."""
 
 
 def _mcp_import():
     try:
         from mcp.server.fastmcp import FastMCP
     except ImportError as exc:  # pragma: no cover - depends on optional install
-        raise RuntimeError(
+        raise MCPUnavailableError(
             "MCP support is optional. Install it with: pip install 'brain-ai-memory[mcp]'"
         ) from exc
     return FastMCP
@@ -24,6 +29,7 @@ def create_mcp_server(
     *,
     host: str = "127.0.0.1",
     port: int = 8000,
+    default_entity: str = "",
 ):
     """Create an MCP server without starting a transport."""
     FastMCP = _mcp_import()
@@ -31,9 +37,12 @@ def create_mcp_server(
     server = FastMCP(
         "brain-ai-memory",
         instructions=(
-            "Use brain_context before acting across sessions. Treat exact state and "
-            "gate verdicts as authoritative. MCP deliberately does not expose arbitrary "
-            "command execution; execute approved actions in the host agent."
+            "Use brain_resume at the start of cross-session work, then brain_context "
+            "before acting. Pass an entity unless this server has a configured default. "
+            "Prefer exact state over estimates, stop when a requested gate returns "
+            "allowed=false, and write brain_checkpoint at handoff. "
+            "MCP deliberately does not expose arbitrary command execution; execute "
+            "approved actions in the host agent."
         ),
         host=host,
         port=port,
@@ -50,14 +59,14 @@ def create_mcp_server(
         return runtime.process(
             query,
             proposed_action=proposed_action or None,
-            entity=entity or None,
+            entity=entity or default_entity or None,
             limit=limit,
         )
 
     @server.tool(name="brain_check_action")
     def check_action(action: str, entity: str = "") -> dict:
         """Return the deterministic allow, warn, or block verdict for an action."""
-        return runtime.gate(action, entity=entity or None)
+        return runtime.gate(action, entity=entity or default_entity or None)
 
     @server.tool(name="brain_remember")
     def remember(
@@ -72,7 +81,8 @@ def create_mcp_server(
         promote_to: str = "",
     ) -> dict:
         """Write an event, fact, rule, or exact state into its owned store."""
-        entities = [entity] if entity else []
+        selected_entity = entity or default_entity
+        entities = [selected_entity] if selected_entity else []
         if kind == "episodic":
             if not text:
                 raise ValueError("text is required for episodic memory")
@@ -104,7 +114,7 @@ def create_mcp_server(
                 key,
                 json.loads(value_json),
                 source=source,
-                entity=entity or None,
+                entity=selected_entity or None,
             )
         raise ValueError("kind must be episodic, semantic, rule, or state")
 
@@ -123,9 +133,28 @@ def create_mcp_server(
         return runtime.store.add_relation(subject, predicate, object, source=source)
 
     @server.tool(name="brain_checkpoint")
-    def checkpoint(summary: str = "") -> dict:
-        """Persist a handoff checkpoint and list pending consolidation candidates."""
+    def checkpoint(
+        summary: str = "",
+        entity: str = "",
+        next_actions: list[str] | None = None,
+    ) -> dict:
+        """Persist an entity-scoped handoff (or a legacy global checkpoint)."""
+        selected_entity = entity or default_entity
+        if selected_entity:
+            return runtime.handoff(
+                selected_entity,
+                summary=summary,
+                next_actions=next_actions or [],
+            )
         return runtime.checkpoint(summary)
+
+    @server.tool(name="brain_resume")
+    def resume(entity: str = "") -> dict:
+        """Return the latest handoff for exactly one entity."""
+        selected_entity = entity or default_entity
+        if not selected_entity:
+            raise ValueError("entity is required when no MCP default entity is configured")
+        return runtime.resume(selected_entity)
 
     @server.tool(name="brain_consolidation_preview")
     def consolidation_preview() -> dict:
@@ -133,9 +162,24 @@ def create_mcp_server(
         return runtime.consolidate(apply=False)
 
     @server.tool(name="brain_supersede")
-    def supersede(old_id: str, new_text: str, source: str = "mcp") -> dict:
-        """Version a stale fact while retaining the old row and source link."""
-        return runtime.reconsolidate(old_id, new_text, source=source)
+    def supersede(
+        old_id: str,
+        new_text: str,
+        source: str = "mcp",
+        entity: str = "",
+    ) -> dict:
+        """Replace a stale fact within one explicit or default entity scope."""
+        selected_entity = entity or default_entity
+        if not selected_entity:
+            raise ValueError(
+                "entity is required for scoped supersession when no default is configured"
+            )
+        return runtime.reconsolidate(
+            old_id,
+            new_text,
+            source=source,
+            entity=selected_entity,
+        )
 
     @server.resource("brain-ai://status", mime_type="application/json")
     def status_resource() -> str:
@@ -158,8 +202,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--entity", default="", help="default entity scope for this MCP server")
     args = parser.parse_args(argv)
-    server = create_mcp_server(args.home, host=args.host, port=args.port)
+    try:
+        server = create_mcp_server(
+            args.home,
+            host=args.host,
+            port=args.port,
+            default_entity=args.entity,
+        )
+    except MCPUnavailableError as exc:
+        print(f"brain-ai-mcp: {exc}", file=sys.stderr)
+        return 2
     server.run(transport=args.transport)
     return 0
 
