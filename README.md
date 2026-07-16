@@ -1,4 +1,4 @@
-**English** | [한국어](README.ko.md)
+**English** | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
 # Brain-AI Memory — Stop Re-explaining Your Project
 

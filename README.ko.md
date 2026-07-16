@@ -1,4 +1,4 @@
-[English](README.md) | **한국어**
+[English](README.md) | **한국어** | [简体中文](README.zh-CN.md)
 
 # Brain-AI Memory — 프로젝트를 매번 다시 설명하지 마세요
 
