@@ -44,7 +44,7 @@ def seed(runtime: BrainAIRuntime) -> tuple[dict[str, str], list[dict]]:
     )["id"]
     runtime.store.set_state("atlas_open_reviews", 3, source="benchmark")
     runtime.store.set_state("retry_failures", 7, source="benchmark")
-    runtime.store.add_rule(r"deploy\s+production", reason="production deployment requires approval", source="benchmark")
+    runtime.store.add_rule("deploy production", reason="production deployment requires approval", source="benchmark")
 
     flat = []
     for item in runtime.store.knowledge():

@@ -91,7 +91,7 @@ brain-ai review audit_0123456789abcdef --approve-ready
 brain-ai review audit_0123456789abcdef \
   --set item_a1b2c3d4e5f60708=state \
   --set item_b1c2d3e4f5061728=episodic \
-  --rule 'item_c1d2e3f405162738=deploy\s+production' --rule-effect block \
+  --rule 'item_c1d2e3f405162738=deploy production' --rule-effect block \
   --supersede item_d1e2f30415263748=mem_1234abcd5678
 ```
 
@@ -220,8 +220,16 @@ brain-ai remember --type semantic --entity "Atlas 2.1" \
   --text "운영 배포 전에는 review가 필요하다"
 brain-ai remember --type state --entity "Atlas 2.1" --key open_reviews --value 3
 brain-ai remember --type rule --entity "Atlas 2.1" \
-  --pattern 'deploy\s+production' --text "승인 필요"
+  --pattern 'deploy production' --text "승인 필요"
 ```
+
+Procedural rule은 임의의 Python regex가 아니라 범위가 제한된 safe-pattern subset을
+사용합니다. Literal text, character class, alternative, 정확한 반복은 허용합니다.
+정확하지 않은 quantifier는 최대 하나만 쓸 수 있고, 이 경우 pattern은 `^` 또는
+`\A`로 시작해야 하며 multiline mode를 쓸 수 없습니다. Nested quantifier,
+backreference, 반복되는 alternative/lookaround, 1,024 byte 초과 pattern, 16 KiB 초과
+action, 현재 범위에 적용되는 256개 초과 rule은 fail-closed 처리합니다. Regex 문법이
+꼭 필요하지 않으면 `deploy production`처럼 literal substring을 사용하세요.
 
 모델이나 agent client가 사용할 audit 가능한 candidate bundle을 만듭니다.
 

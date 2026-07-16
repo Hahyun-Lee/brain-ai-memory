@@ -12,6 +12,13 @@ from .privacy import create_private_file, ensure_private_directory
 DEFAULT_CONFIG = {
     "schema_version": 1,
     "runtime": {"recall_limit": 5},
+    "autoloop": {
+        "max_context_bytes": 6000,
+        "max_record_bytes": 900,
+        "capture_raw_prompt": False,
+        "capture_raw_tool_output": False,
+        "auto_store_artifact_events": True,
+    },
     "semantic": {
         "backend": "local",
         "vault_path": None,

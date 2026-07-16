@@ -11,7 +11,15 @@ from . import __version__
 from .adapters import build_semantic_adapter
 from .config import load_config, resolve_home
 from .ontology import load_ontology
-from .storage import MemoryStore, new_id, utc_now
+from .storage import (
+    MAX_ACTIVE_RULES,
+    MAX_RULE_ACTION_BYTES,
+    MemoryStore,
+    compile_safe_rule_pattern,
+    new_id,
+    utc_now,
+    validate_rule_reason,
+)
 from .text import tokenize
 
 
@@ -24,6 +32,17 @@ BUILTIN_RULES = [
 NUMERIC_HINTS = re.compile(r"\b(count|number|total|metric|how many)\b|개수|몇\s*개|수치|총합", re.I)
 TEMPORAL_HINTS = re.compile(r"\b(when|before|after|recent|last|timeline|session)\b|언제|이전|이후|최근|세션", re.I)
 PROCEDURAL_HINTS = re.compile(r"\b(rule|must|never|always|procedure|workflow|fallback|how do)\b|규칙|절차|항상|금지|실행", re.I)
+MAX_RULE_VERDICT_BYTES = 2_048
+
+
+def _bounded_verdict_reason(value: object) -> str:
+    text = re.sub(r"\s+", " ", str(value)).strip()
+    raw = text.encode("utf-8")
+    if len(raw) <= MAX_RULE_VERDICT_BYTES:
+        return text
+    suffix = "…"
+    available = MAX_RULE_VERDICT_BYTES - len(suffix.encode("utf-8"))
+    return raw[:available].decode("utf-8", errors="ignore") + suffix
 
 
 class BrainAIRuntime:
@@ -53,26 +72,84 @@ class BrainAIRuntime:
     def gate(self, action: str | None, *, entity: str | None = None) -> dict:
         if not action:
             return {"allowed": True, "effect": "allow", "reason": "no proposed action", "rule_id": None}
-        warnings = []
+        if len(action.encode("utf-8", errors="surrogatepass")) > MAX_RULE_ACTION_BYTES:
+            return {
+                "allowed": False,
+                "effect": "block",
+                "reason": f"action exceeds the {MAX_RULE_ACTION_BYTES}-byte procedural safety limit",
+                "rule_id": "safety-bound",
+            }
+        warnings: list[tuple[str, str]] = []
         for pattern, effect, reason in BUILTIN_RULES:
             if pattern.search(action):
                 if effect == "block":
                     return {"allowed": False, "effect": effect, "reason": reason, "rule_id": "builtin"}
-                warnings.append(reason)
+                warnings.append(("builtin", reason))
         entity_id = self.store.get_entity(entity)["id"] if entity else None
+        unresolved = self.store.applicable_rule_quarantines(entity_id)
+        if unresolved:
+            rule = unresolved[0]
+            return {
+                "allowed": False,
+                "effect": "block",
+                "reason": (
+                    "legacy procedural rule requires operator review before "
+                    "enforcement can continue safely"
+                ),
+                "rule_id": rule["id"],
+            }
+        applicable_rules = []
         for rule in self.store.rules():
             if rule.get("entity_ids"):
                 if not entity_id or entity_id not in rule["entity_ids"]:
                     continue
-            if re.search(rule["pattern"], action):
+            applicable_rules.append(rule)
+        if len(applicable_rules) > MAX_ACTIVE_RULES:
+            return {
+                "allowed": False,
+                "effect": "block",
+                "reason": (
+                    "active procedural rules exceed the "
+                    f"{MAX_ACTIVE_RULES}-rule safety limit"
+                ),
+                "rule_id": "safety-bound",
+            }
+        compiled_rules = []
+        for rule in applicable_rules:
+            try:
+                pattern = compile_safe_rule_pattern(rule["pattern"])
+                validate_rule_reason(rule["reason"])
+                if rule.get("effect") not in {"block", "warn"}:
+                    raise ValueError("invalid procedural rule effect")
+            except ValueError:
+                return {
+                    "allowed": False,
+                    "effect": "block",
+                    "reason": "stored procedural rule cannot be evaluated safely",
+                    "rule_id": rule["id"],
+                }
+            compiled_rules.append((rule, pattern))
+        for rule, pattern in compiled_rules:
+            if pattern.search(action):
                 if rule["effect"] == "block":
-                    return {"allowed": False, "effect": "block", "reason": rule["reason"], "rule_id": rule["id"]}
-                warnings.append(rule["reason"])
+                    return {
+                        "allowed": False,
+                        "effect": "block",
+                        "reason": _bounded_verdict_reason(rule["reason"]),
+                        "rule_id": rule["id"],
+                    }
+                warnings.append((rule["id"], _bounded_verdict_reason(rule["reason"])))
+        warning_ids = [rule_id for rule_id, _ in warnings]
         return {
             "allowed": True,
             "effect": "warn" if warnings else "allow",
-            "reason": "; ".join(warnings) if warnings else "no rule matched",
-            "rule_id": None,
+            "reason": (
+                _bounded_verdict_reason("; ".join(reason for _, reason in warnings))
+                if warnings
+                else "no rule matched"
+            ),
+            "rule_id": warning_ids[0] if len(warning_ids) == 1 else None,
+            "rule_ids": warning_ids,
         }
 
     def recall(
@@ -112,14 +189,28 @@ class BrainAIRuntime:
         if "IPS" in route:
             by_component["IPS"] = self.store.search_states(query, limit, entity=entity_id)
         if "BG" in route:
-            query_terms = set(tokenize(f"{query} {proposed_action or ''}"))
+            bounded_action = proposed_action or ""
+            if len(bounded_action.encode("utf-8", errors="surrogatepass")) > MAX_RULE_ACTION_BYTES:
+                bounded_action = ""
+            query_terms = set(tokenize(f"{query} {bounded_action}"))
             rules = []
+            applicable_rules = []
             for rule in self.store.rules():
                 if rule.get("entity_ids"):
                     if not entity_id or entity_id not in rule["entity_ids"]:
                         continue
+                applicable_rules.append(rule)
+            for rule in applicable_rules[:MAX_ACTIVE_RULES]:
                 rule_terms = set(tokenize(f"{rule['pattern']} {rule['reason']}"))
-                if query_terms & rule_terms or (proposed_action and re.search(rule["pattern"], proposed_action)):
+                matched_action = False
+                if bounded_action:
+                    try:
+                        matched_action = bool(
+                            compile_safe_rule_pattern(rule["pattern"]).search(bounded_action)
+                        )
+                    except ValueError:
+                        matched_action = False
+                if query_terms & rule_terms or matched_action:
                     rules.append({**rule, "component": "BG", "kind": "procedural-rule"})
             by_component["BG"] = rules[:limit]
         entity_context = None
@@ -278,6 +369,31 @@ class BrainAIRuntime:
         next_actions: list[str] | None = None,
     ) -> dict:
         """Write a project-scoped checkpoint for a later session."""
+        record = self.build_handoff_record(
+            entity,
+            summary=summary,
+            next_actions=next_actions,
+        )
+        self.store.append_checkpoint(record)
+        self.store.append_audit({"event": "entity_handoff", **record})
+        return record
+
+    def build_handoff_record(
+        self,
+        entity: str,
+        *,
+        summary: str = "",
+        next_actions: list[str] | None = None,
+        record_id: str | None = None,
+        created_at: str | None = None,
+        extra: dict | None = None,
+    ) -> dict:
+        """Build an entity handoff without writing it.
+
+        Autonomous hooks reserve deterministic checkpoint ids in SQLite before
+        mirroring the compatible JSONL record.  Manual callers continue to use
+        :meth:`handoff`, which writes the returned record immediately.
+        """
         record_entity = self.store.get_entity(entity)
         entity_id = record_entity["id"]
         pending = [
@@ -286,7 +402,7 @@ class BrainAIRuntime:
             if event.get("promote_to") and entity_id in event.get("entity_ids", [])
         ]
         record = {
-            "id": new_id("handoff"),
+            "id": record_id or new_id("handoff"),
             "kind": "entity-handoff",
             "entity": {
                 "id": entity_id,
@@ -308,21 +424,30 @@ class BrainAIRuntime:
                 "exact_state": len(self.store.states(entity_id, include_global=False)),
             },
             "pending_consolidation": pending,
-            "created_at": utc_now(),
+            "created_at": created_at or utc_now(),
         }
-        self.store.append_checkpoint(record)
-        self.store.append_audit({"event": "entity_handoff", **record})
+        if extra:
+            record.update(extra)
         return record
 
     def resume(self, entity: str) -> dict:
         """Read the newest handoff for exactly one entity."""
         record_entity = self.store.get_entity(entity)
-        for checkpoint in reversed(self.store.checkpoints(100_000)):
-            if (
-                checkpoint.get("kind") == "entity-handoff"
-                and checkpoint.get("entity", {}).get("id") == record_entity["id"]
-            ):
-                return checkpoint
+        matches = [
+            (position, checkpoint)
+            for position, checkpoint in enumerate(self.store.checkpoints(100_000))
+            if checkpoint.get("kind") == "entity-handoff"
+            and checkpoint.get("entity", {}).get("id") == record_entity["id"]
+        ]
+        if matches:
+            # Recovery can mirror an older reserved checkpoint after a newer
+            # manual handoff was appended.  Event time, not JSONL append order,
+            # defines which handoff is current; append position is only a stable
+            # tiebreak for legacy records with the same/missing timestamp.
+            return max(
+                matches,
+                key=lambda item: (str(item[1].get("created_at") or ""), item[0]),
+            )[1]
         return {
             "kind": "entity-handoff",
             "status": "not_found",

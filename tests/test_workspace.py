@@ -5,6 +5,7 @@ import copy
 import io
 import json
 import os
+import re
 import sqlite3
 import stat
 import sys
@@ -13,6 +14,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
+
+import brain_ai_memory.workspace as workspace_module
 from brain_ai_memory.cli import main as cli_main
 from brain_ai_memory.runtime import BrainAIRuntime
 from brain_ai_memory.workspace import (
@@ -554,7 +561,7 @@ lazy blockquote continuation must also stay inert
         audit = build_audit(self.source, entity="Atlas")
         runtime = BrainAIRuntime(self.home)
         review = build_review(audit, runtime.store, approve_ready=True)
-        first = apply_review(self.home, runtime.store, review, audit)
+        apply_review(self.home, runtime.store, review, audit)
         self.source.write_text(
             "# Facts\n\n- Atlas deploys on Friday.\n", encoding="utf-8"
         )
@@ -562,12 +569,34 @@ lazy blockquote continuation must also stay inert
         repeated = apply_review(self.home, runtime.store, review, audit)
 
         self.assertEqual(repeated["status"], "already_applied")
+
+    def test_applied_legacy_rule_review_remains_idempotent_after_safety_tightening(self):
+        self.write_memory("# Rules\n\n- Production deployment requires approval.\n")
+        runtime = BrainAIRuntime(self.home)
+        audit = build_audit(self.source, entity="Atlas")
+        item_id = audit["entries"][0]["id"]
+        legacy_pattern = r"^git\s+push\s+--force\s+now$"
+
+        with mock.patch.object(
+            workspace_module,
+            "compile_safe_rule_pattern",
+            side_effect=re.compile,
+        ):
+            review = build_review(
+                audit,
+                runtime.store,
+                rules=[f"{item_id}={legacy_pattern}"],
+            )
+            first = apply_review(self.home, runtime.store, review, audit)
+
+        self.assertEqual(first["status"], "applied")
+        upgraded = BrainAIRuntime(self.home)
+        repeated = apply_review(self.home, upgraded.store, review, audit)
+        self.assertEqual(repeated["status"], "already_applied")
         self.assertEqual(repeated["id"], first["id"])
-        self.assertTrue(repeated["source_file_changed"])
-        self.assertEqual(
-            [item["text"] for item in runtime.store.knowledge()],
-            ["Atlas deploys on Thursday."],
-        )
+        self.assertFalse(repeated["source_file_changed"])
+        quarantined = upgraded.store.unresolved_rule_quarantines()
+        self.assertEqual([item["pattern"] for item in quarantined], [legacy_pattern])
 
     def test_bom_crlf_and_missing_final_newline_remain_byte_identical_through_apply(self):
         original = b"\xef\xbb\xbf# Facts\r\n\r\n- Atlas deploys on Thursday."
@@ -725,7 +754,7 @@ lazy blockquote continuation must also stay inert
             audit,
             runtime.store,
             assignments=[f"{state_entry['id']}=state"],
-            rules=[f"{rule_entry['id']}=deploy\\s+production"],
+            rules=[f"{rule_entry['id']}=deploy production"],
             rule_effect="block",
         )
         self.assertEqual(review["counts"], {"approved": 2, "skipped": 0, "unresolved": 0})
@@ -1224,11 +1253,57 @@ lazy blockquote continuation must also stay inert
         runtime = BrainAIRuntime(self.home)
         audit = build_audit(self.source, entity="Atlas")
         item_id = audit["entries"][0]["id"]
-        with self.assertRaisesRegex(ValueError, "invalid rule regular expression"):
+        with self.assertRaisesRegex(ValueError, "invalid procedural rule"):
             build_review(
                 audit,
                 runtime.store,
                 rules=[f"{item_id}=["],
+            )
+
+    def test_unsafe_rule_regex_is_rejected_by_review_and_apply_without_mutation(self):
+        self.write_memory("# Rules\n\n- Production requires approval.\n")
+        runtime = BrainAIRuntime(self.home)
+        audit = build_audit(self.source, entity="Atlas")
+        item_id = audit["entries"][0]["id"]
+        pathological = r"(a+)+$"
+
+        with self.assertRaisesRegex(ValueError, "invalid procedural rule"):
+            build_review(
+                audit,
+                runtime.store,
+                rules=[f"{item_id}={pathological}"],
+            )
+
+        review = build_review(
+            audit,
+            runtime.store,
+            rules=[f"{item_id}=deploy production"],
+        )
+        review["decisions"][item_id]["pattern"] = pathological
+        identity = {
+            "audit_id": review["audit_id"],
+            "entity": review["entity"],
+            "source_sha256": review["source"]["sha256"],
+            "store_revision": review["store_revision"],
+            "decisions": {
+                key: review["decisions"][key]
+                for key in sorted(review["decisions"])
+            },
+        }
+        review["id"] = workspace_module._stable_id("review", identity)
+
+        with self.assertRaisesRegex(ValueError, "invalid procedural rule"):
+            apply_review(self.home, runtime.store, review, audit)
+
+        with runtime.store.connect() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM rules").fetchone()[0], 0)
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM import_batches").fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM import_ledger").fetchone()[0],
+                0,
             )
 
     def test_handoff_and_resume_are_isolated_by_entity(self):
@@ -1245,8 +1320,8 @@ lazy blockquote continuation must also stay inert
         )
         runtime.store.set_state("open_reviews", 1, entity=atlas["id"])
         runtime.store.set_state("open_reviews", 7, entity=boreal["id"])
-        runtime.store.add_rule(r"deploy\s+atlas", reason="Atlas approval", entities=[atlas["id"]])
-        runtime.store.add_rule(r"deploy\s+boreal", reason="Boreal approval", entities=[boreal["id"]])
+        runtime.store.add_rule(r"deploy atlas", reason="Atlas approval", entities=[atlas["id"]])
+        runtime.store.add_rule(r"deploy boreal", reason="Boreal approval", entities=[boreal["id"]])
 
         first_session = runtime.resume("Atlas")
         self.assertEqual(first_session["status"], "not_found")
@@ -1683,6 +1758,10 @@ lazy blockquote continuation must also stay inert
     def test_connection_status_requires_current_home_interpreter_and_optional_entity(self):
         project_root = self.root / "status-project"
         project_root.mkdir()
+        runtime = BrainAIRuntime(self.home)
+        runtime.store.put_entity(
+            "Atlas", entity_type="project", aliases=["A"]
+        )
         connection_change(
             self.home,
             "claude-code",
@@ -1708,6 +1787,21 @@ lazy blockquote continuation must also stay inert
             project_root=project_root,
         )
         self.assertTrue(valid["configured"])
+        self.assertTrue(
+            connection_status(
+                self.home,
+                "claude-code",
+                project_root=project_root,
+                entity="A",
+            )["configured"]
+        )
+        alias_preview = connection_change(
+            self.home,
+            "claude-code",
+            entity="A",
+            project_root=project_root,
+        )
+        self.assertFalse(alias_preview["changed"])
         self.assertFalse(wrong_entity["configured"])
         self.assertFalse(wrong_home["configured"])
         with self.assertRaisesRegex(ValueError, "different Brain-AI home"):
@@ -1728,6 +1822,111 @@ lazy blockquote continuation must also stay inert
                 disconnect=True,
                 apply=True,
             )
+        alias_disconnect = connection_change(
+            self.home,
+            "claude-code",
+            entity="A",
+            project_root=project_root,
+            disconnect=True,
+            apply=True,
+        )
+        self.assertEqual(alias_disconnect["status"], "disconnected")
+
+    def test_project_connection_migrates_old_unlocked_entity_binding(self):
+        project_root = self.root / "migration-project"
+        project_root.mkdir()
+        runtime = BrainAIRuntime(self.home)
+        runtime.store.put_entity("Atlas", entity_type="project")
+        connected = connection_change(
+            self.home,
+            "claude-code",
+            entity="Atlas",
+            project_root=project_root,
+            apply=True,
+        )
+        path = Path(connected["path"])
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                '"--locked-entity"', '"--entity"'
+            ),
+            encoding="utf-8",
+        )
+
+        status = connection_status(
+            self.home,
+            "claude-code",
+            project_root=project_root,
+            entity="Atlas",
+        )
+        self.assertFalse(status["configured"])
+        self.assertTrue(status["managed_entry"])
+        self.assertTrue(status["migration_required"])
+        self.assertIn("connect claude-code --entity Atlas", status["migration_command"])
+        self.assertIn(f"--project-root {project_root.resolve()}", status["migration_command"])
+        self.assertTrue(status["migration_command"].endswith("--apply"))
+
+        upgraded = connection_change(
+            self.home,
+            "claude-code",
+            entity="Atlas",
+            project_root=project_root,
+            apply=True,
+        )
+        self.assertTrue(upgraded["changed"])
+        self.assertTrue(
+            connection_status(
+                self.home,
+                "claude-code",
+                project_root=project_root,
+                entity="Atlas",
+            )["configured"]
+        )
+
+    def test_user_tools_connection_keeps_overridable_entity(self):
+        runtime = BrainAIRuntime(self.home)
+        runtime.store.put_entity("Atlas", entity_type="project")
+        fake_user_home = (self.root / "user-home").resolve()
+        fake_user_home.mkdir()
+
+        with mock.patch(
+            "brain_ai_memory.workspace.Path.home", return_value=fake_user_home
+        ):
+            for host in ("codex", "claude-code"):
+                with self.subTest(host=host):
+                    connected = connection_change(
+                        self.home,
+                        host,
+                        entity="Atlas",
+                        scope="user",
+                        apply=True,
+                    )
+                    path = Path(connected["path"])
+                    if host == "codex":
+                        entry = tomllib.loads(path.read_text(encoding="utf-8"))[
+                            "mcp_servers"
+                        ]["brain-ai-memory"]
+                    else:
+                        entry = json.loads(path.read_text(encoding="utf-8"))[
+                            "mcpServers"
+                        ]["brain-ai-memory"]
+                    self.assertEqual(entry["args"][4], "--entity")
+                    status = connection_status(
+                        self.home,
+                        host,
+                        scope="user",
+                        entity="Atlas",
+                    )
+                    self.assertTrue(status["configured"])
+                    self.assertFalse(status["entity_locked"])
+                    self.assertFalse(status["migration_required"])
+                    connection_change(
+                        self.home,
+                        host,
+                        entity="Atlas",
+                        scope="user",
+                        disconnect=True,
+                        apply=True,
+                    )
 
 
 if __name__ == "__main__":

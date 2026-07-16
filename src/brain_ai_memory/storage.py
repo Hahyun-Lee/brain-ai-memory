@@ -4,15 +4,29 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
+try:  # Python 3.11+; the compatibility fallback keeps Python 3.10 support.
+    from re import _parser as _regex_parser
+except ImportError:  # pragma: no cover - exercised on Python 3.10
+    import sre_parse as _regex_parser
+
 from .config import write_default_config
-from .privacy import create_private_file, ensure_private_directory, open_private_append
+from .migrations import migrate_loop_schema
+from .privacy import (
+    create_private_file,
+    ensure_private_directory,
+    exclusive_file_lock,
+    open_private_append,
+    open_private_lock,
+)
 from .text import ranked
 
 
@@ -21,6 +35,147 @@ LIFECYCLE_OPERATIONS = {
     "migrate-to-rules", "delete", "split",
 }
 SLUG = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+MAX_RULE_PATTERN_BYTES = 1024
+MAX_RULE_REASON_BYTES = 1024
+MAX_RULE_ACTION_BYTES = 16 * 1024
+MAX_RULE_FIXED_REPEAT = 1024
+MAX_ACTIVE_RULES = 256
+
+
+class _ClosingConnection(sqlite3.Connection):
+    """Give internal ``with store.connect()`` blocks close-on-exit semantics."""
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
+def validate_rule_reason(reason: str) -> str:
+    if not isinstance(reason, str):
+        raise ValueError("rule reason must be a string")
+    clean = reason.strip()
+    if not clean:
+        raise ValueError("rule reason is required")
+    if len(clean.encode("utf-8", errors="surrogatepass")) > MAX_RULE_REASON_BYTES:
+        raise ValueError(f"rule reason exceeds {MAX_RULE_REASON_BYTES} bytes")
+    return clean
+
+
+def _rule_field_sha256(value: object) -> str:
+    """Hash malformed legacy fields without assuming SQLite type affinity held."""
+    if isinstance(value, str):
+        raw = value.encode("utf-8", errors="surrogatepass")
+    elif isinstance(value, bytes):
+        raw = b"sqlite-blob\0" + value
+    else:
+        rendered = json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=lambda item: f"<{type(item).__name__}>",
+        )
+        raw = rendered.encode("utf-8", errors="surrogatepass")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _validate_rule_tokens(
+    tokens,
+    *,
+    inside_repeat: bool = False,
+    variable_repeats: list[int] | None = None,
+) -> None:
+    """Reject regex structures that can make backtracking unbounded."""
+    if variable_repeats is None:
+        variable_repeats = [0]
+    for operation, argument in tokens:
+        name = str(operation)
+        if name.startswith("GROUPREF") or name == "CALL":
+            raise ValueError("procedural rule patterns cannot use backreferences or conditionals")
+        if name in {"MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT"}:
+            if inside_repeat:
+                raise ValueError("procedural rule patterns cannot contain nested quantifiers")
+            minimum, maximum, repeated = argument
+            if maximum != _regex_parser.MAXREPEAT and maximum > MAX_RULE_FIXED_REPEAT:
+                raise ValueError(
+                    f"procedural rule repeat exceeds {MAX_RULE_FIXED_REPEAT}"
+                )
+            if minimum != maximum:
+                variable_repeats[0] += 1
+                if variable_repeats[0] > 1:
+                    raise ValueError(
+                        "procedural rule patterns cannot contain multiple variable quantifiers"
+                    )
+            _validate_rule_tokens(
+                repeated,
+                inside_repeat=True,
+                variable_repeats=variable_repeats,
+            )
+        elif name == "SUBPATTERN":
+            _validate_rule_tokens(
+                argument[-1],
+                inside_repeat=inside_repeat,
+                variable_repeats=variable_repeats,
+            )
+        elif name == "BRANCH":
+            if inside_repeat:
+                raise ValueError("procedural rule patterns cannot repeat an alternation")
+            for branch in argument[1]:
+                _validate_rule_tokens(
+                    branch,
+                    inside_repeat=inside_repeat,
+                    variable_repeats=variable_repeats,
+                )
+        elif name in {"ASSERT", "ASSERT_NOT"}:
+            if inside_repeat:
+                raise ValueError("procedural rule patterns cannot repeat a lookaround")
+            _validate_rule_tokens(
+                argument[-1],
+                inside_repeat=inside_repeat,
+                variable_repeats=variable_repeats,
+            )
+        elif name == "ATOMIC_GROUP":
+            _validate_rule_tokens(
+                argument,
+                inside_repeat=inside_repeat,
+                variable_repeats=variable_repeats,
+            )
+
+
+@lru_cache(maxsize=256)
+def compile_safe_rule_pattern(pattern: str) -> re.Pattern[str]:
+    """Compile the deliberately small, backtracking-bounded rule subset."""
+    if not isinstance(pattern, str) or not pattern:
+        raise ValueError("procedural rule pattern is required")
+    if len(pattern.encode("utf-8", errors="surrogatepass")) > MAX_RULE_PATTERN_BYTES:
+        raise ValueError(
+            f"procedural rule pattern exceeds {MAX_RULE_PATTERN_BYTES} bytes"
+        )
+    try:
+        parsed = _regex_parser.parse(pattern)
+        variable_repeats = [0]
+        _validate_rule_tokens(parsed, variable_repeats=variable_repeats)
+        if variable_repeats[0]:
+            first = next(iter(parsed), None)
+            anchored = bool(
+                first
+                and str(first[0]) == "AT"
+                and str(first[1]) in {"AT_BEGINNING", "AT_BEGINNING_STRING"}
+                and not (
+                    str(first[1]) == "AT_BEGINNING"
+                    and parsed.state.flags & re.MULTILINE
+                )
+            )
+            if not anchored:
+                raise ValueError(
+                    "procedural rule patterns with a variable quantifier "
+                    "must begin with ^ or \\A and cannot use multiline mode"
+                )
+        return re.compile(pattern)
+    except re.error as exc:
+        raise ValueError(f"invalid procedural rule pattern: {exc}") from exc
 
 
 def utc_now() -> str:
@@ -69,6 +224,18 @@ class MemoryStore:
                     enabled INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS rule_admin_events (
+                    id TEXT PRIMARY KEY,
+                    rule_id TEXT NOT NULL,
+                    operation TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    pattern_sha256 TEXT NOT NULL,
+                    rule_reason_sha256 TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(rule_id) REFERENCES rules(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_rule_admin_events_rule
+                    ON rule_admin_events(rule_id, created_at);
                 CREATE TABLE IF NOT EXISTS numerical_state (
                     key TEXT PRIMARY KEY,
                     value_json TEXT NOT NULL,
@@ -401,38 +568,142 @@ class MemoryStore:
                 conn.rollback()
                 raise
 
+        with self.connect() as conn:
+            migrate_loop_schema(conn)
+
+        self.quarantine_unsafe_rules()
+        # SQLite is the authoritative safety receipt.  Audit JSONL is an
+        # inspectable mirror and must never prevent startup or enforcement;
+        # every initialization retries any mirror interrupted by a crash or
+        # filesystem error.
+        self.mirror_rule_admin_events()
+
         ignore_path = self.home / ".gitignore"
         create_private_file(ignore_path, b"*\n")
 
     def connect(self) -> sqlite3.Connection:
         create_private_file(self.db_path)
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=5.0,
+            factory=_ClosingConnection,
+        )
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 5000")
         return conn
 
     @staticmethod
-    def _append_jsonl(path: Path, record: dict) -> None:
+    def _append_jsonl_unlocked(path: Path, record: dict) -> None:
         payload = (json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
         with open_private_append(path) as handle:
             handle.write(payload)
             handle.flush()
+            os.fsync(handle.fileno())
 
     @staticmethod
-    def _read_jsonl(path: Path) -> list[dict]:
+    def _repair_jsonl_tail_unlocked(path: Path) -> Path | None:
+        """Quarantine and remove an unterminated final physical line.
+
+        Callers must hold the stream's sidecar lock.  A committed JSONL record
+        always ends in a newline, so an unterminated tail is crash evidence,
+        not a record that is safe to extend.
+        """
+        if not path.exists():
+            return None
+        with open_private_lock(path) as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            if size == 0:
+                return None
+            handle.seek(-1, os.SEEK_END)
+            if handle.read(1) == b"\n":
+                return None
+
+            cursor = size
+            tail_start = 0
+            while cursor:
+                start = max(0, cursor - 64 * 1024)
+                handle.seek(start)
+                chunk = handle.read(cursor - start)
+                newline = chunk.rfind(b"\n")
+                if newline >= 0:
+                    tail_start = start + newline + 1
+                    break
+                cursor = start
+
+            handle.seek(tail_start)
+            tail = handle.read(size - tail_start)
+            digest = hashlib.sha256(tail).hexdigest()
+            quarantine = path.with_name(
+                f"{path.name}.truncated-{digest}.bin"
+            )
+            created = create_private_file(quarantine, tail)
+            if not created and quarantine.read_bytes() != tail:
+                raise ValueError(
+                    f"truncated JSONL evidence conflicts with quarantine: {quarantine}"
+                )
+            handle.truncate(tail_start)
+            handle.flush()
+            os.fsync(handle.fileno())
+            return quarantine
+
+    @classmethod
+    def _append_jsonl(cls, path: Path, record: dict) -> None:
+        """Append one record under the same cross-platform stream lock."""
+        lock_path = path.with_name(f"{path.name}.lock")
+        with open_private_lock(lock_path) as lock:
+            with exclusive_file_lock(lock):
+                cls._repair_jsonl_tail_unlocked(path)
+                cls._append_jsonl_unlocked(path, record)
+
+    @classmethod
+    def _append_jsonl_once(cls, path: Path, record: dict) -> bool:
+        """Append one stable-id record exactly once across local hook processes."""
+        record_id = record.get("id")
+        if not isinstance(record_id, str) or not record_id:
+            raise ValueError("idempotent JSONL records require a stable id")
+        lock_path = path.with_name(f"{path.name}.lock")
+        with open_private_lock(lock_path) as lock:
+            with exclusive_file_lock(lock):
+                cls._repair_jsonl_tail_unlocked(path)
+                if any(
+                    item.get("id") == record_id
+                    for item in cls._read_jsonl_unlocked(path)
+                ):
+                    return False
+                cls._append_jsonl_unlocked(path, record)
+                return True
+
+    @staticmethod
+    def _read_jsonl_unlocked(path: Path) -> list[dict]:
         records = []
         if not path.exists():
             return records
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            try:
-                value = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(value, dict):
-                records.append(value)
+        with open_private_lock(path) as handle:
+            handle.seek(0)
+            for raw_line in handle:
+                if not raw_line.strip():
+                    continue
+                if not raw_line.endswith(b"\n"):
+                    # Appenders commit complete physical lines.  Never expose
+                    # an unterminated tail as a record, even if its JSON text
+                    # happens to be syntactically complete.
+                    continue
+                try:
+                    value = json.loads(raw_line.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if isinstance(value, dict):
+                    records.append(value)
         return records
+
+    @classmethod
+    def _read_jsonl(cls, path: Path) -> list[dict]:
+        lock_path = path.with_name(f"{path.name}.lock")
+        with open_private_lock(lock_path) as lock:
+            with exclusive_file_lock(lock):
+                return cls._read_jsonl_unlocked(path)
 
     @staticmethod
     def _entity_row(row: sqlite3.Row) -> dict:
@@ -664,6 +935,22 @@ class MemoryStore:
         }
         self._append_jsonl(self.events_path, record)
         return record
+
+    def append_event_once(self, record: dict) -> bool:
+        """Mirror an admitted autonomous event without duplicating retries."""
+        self._validate_event_record(record)
+        return self._append_jsonl_once(self.events_path, dict(record))
+
+    def _validate_event_record(self, record: dict) -> None:
+        if record.get("type") != "episodic":
+            raise ValueError("autonomous event records must be episodic")
+        if not str(record.get("text", "")).strip():
+            raise ValueError("event text is required")
+        entity_ids = record.get("entity_ids") or []
+        if not isinstance(entity_ids, list):
+            raise ValueError("event entity_ids must be a list")
+        for reference in entity_ids:
+            self.get_entity(reference)
 
     def events(self, include_inactive: bool = False) -> list[dict]:
         records = self._read_jsonl(self.events_path)
@@ -1064,16 +1351,14 @@ class MemoryStore:
     ) -> dict:
         if effect not in {"block", "warn"}:
             raise ValueError("rule effect must be block or warn")
-        if not reason.strip():
-            raise ValueError("rule reason is required")
-        import re
-        re.compile(pattern)
+        clean_reason = validate_rule_reason(reason)
+        compile_safe_rule_pattern(pattern)
         entity_ids = list(
             dict.fromkeys(self.get_entity(reference)["id"] for reference in entities)
         )
         record = {
             "id": new_id("rule"), "pattern": pattern, "effect": effect,
-            "reason": reason.strip(), "source": source, "enabled": 1,
+            "reason": clean_reason, "source": source, "enabled": 1,
             "created_at": utc_now(),
         }
         with self.connect() as conn:
@@ -1093,9 +1378,241 @@ class MemoryStore:
         ]
         return record
 
-    def rules(self) -> list[dict]:
+    @staticmethod
+    def _rule_safety_error(record: dict) -> str | None:
+        try:
+            if record.get("effect") not in {"block", "warn"}:
+                raise ValueError("rule effect must be block or warn")
+            compile_safe_rule_pattern(record["pattern"])
+            validate_rule_reason(record["reason"])
+        except ValueError as exc:
+            return re.sub(r"\s+", " ", str(exc)).strip()[:1024]
+        return None
+
+    @staticmethod
+    def _rule_admin_event(
+        conn: sqlite3.Connection,
+        record: dict,
+        *,
+        operation: str,
+        reason: str,
+    ) -> dict:
+        now = utc_now()
+        event = {
+            "id": new_id("ruleevt"),
+            "rule_id": record["id"],
+            "operation": operation,
+            "reason": reason,
+            "pattern_sha256": _rule_field_sha256(record["pattern"]),
+            "rule_reason_sha256": _rule_field_sha256(record["reason"]),
+            "created_at": now,
+        }
+        conn.execute(
+            """INSERT INTO rule_admin_events
+            (id, rule_id, operation, reason, pattern_sha256,
+             rule_reason_sha256, created_at)
+            VALUES (:id, :rule_id, :operation, :reason, :pattern_sha256,
+                    :rule_reason_sha256, :created_at)""",
+            event,
+        )
+        return event
+
+    def quarantine_unsafe_rules(self) -> list[dict]:
+        """Register unsafe legacy rules without silently changing enforcement."""
+        events: list[dict] = []
         with self.connect() as conn:
-            rows = conn.execute("SELECT * FROM rules WHERE enabled = 1 ORDER BY created_at").fetchall()
+            conn.execute("BEGIN IMMEDIATE")
+            rows = conn.execute(
+                "SELECT * FROM rules WHERE enabled = 1 ORDER BY created_at"
+            ).fetchall()
+            for row in rows:
+                record = dict(row)
+                error = self._rule_safety_error(record)
+                if not error:
+                    continue
+                pattern_sha256 = _rule_field_sha256(record["pattern"])
+                latest = conn.execute(
+                    """SELECT operation, pattern_sha256 FROM rule_admin_events
+                    WHERE rule_id=? ORDER BY created_at DESC LIMIT 1""",
+                    (record["id"],),
+                ).fetchone()
+                if (
+                    latest
+                    and latest["operation"] == "auto-quarantine"
+                    and latest["pattern_sha256"] == pattern_sha256
+                ):
+                    continue
+                events.append(
+                    self._rule_admin_event(
+                        conn,
+                        record,
+                        operation="auto-quarantine",
+                        reason=f"v0.6 safe-pattern admission: {error}"[:1024],
+                    )
+                )
+            conn.commit()
+        return events
+
+    def unresolved_rule_quarantines(self) -> list[dict]:
+        """Return rules whose latest admin event still requires acknowledgment."""
+        with self.connect() as conn:
+            rows = conn.execute(
+                """SELECT r.*, e.id AS quarantine_event_id,
+                          e.reason AS quarantine_reason,
+                          e.created_at AS quarantined_at
+                FROM rules r
+                JOIN rule_admin_events e ON e.id = (
+                    SELECT latest.id FROM rule_admin_events latest
+                    WHERE latest.rule_id = r.id
+                    ORDER BY latest.created_at DESC LIMIT 1
+                )
+                WHERE e.operation = 'auto-quarantine'
+                ORDER BY e.created_at"""
+            ).fetchall()
+        records = []
+        for row in rows:
+            record = dict(row)
+            record["entity_ids"] = [
+                link["entity_id"] for link in self.entity_links("rule", record["id"])
+            ]
+            records.append(record)
+        return records
+
+    def applicable_rule_quarantines(self, entity: str | None = None) -> list[dict]:
+        """Return unresolved quarantines that can affect one execution scope.
+
+        Rules without entity links are global.  Entity-linked rules apply only
+        when that entity is selected; this mirrors the runtime gate instead of
+        making an unrelated project's quarantine block every doctor/connect
+        operation that shares the same local store.
+        """
+        entity_id = self.get_entity(entity)["id"] if entity else None
+        return [
+            rule
+            for rule in self.unresolved_rule_quarantines()
+            if not rule.get("entity_ids")
+            or (entity_id is not None and entity_id in rule["entity_ids"])
+        ]
+
+    def rule_admin_events(self, rule_id: str | None = None) -> list[dict]:
+        with self.connect() as conn:
+            if rule_id:
+                rows = conn.execute(
+                    """SELECT * FROM rule_admin_events
+                    WHERE rule_id=? ORDER BY created_at""",
+                    (rule_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM rule_admin_events ORDER BY created_at"
+                ).fetchall()
+        return [dict(row) for row in rows]
+
+    def mirror_rule_admin_events(self) -> list[str]:
+        """Best-effort replay of authoritative rule-admin receipts to audit JSONL."""
+        pending: list[str] = []
+        for event in self.rule_admin_events():
+            try:
+                self.append_audit_once(
+                    {**event, "id": f"audit_{event['id']}", "event": "rule_admin"}
+                )
+            except Exception:
+                pending.append(event["id"])
+        return pending
+
+    def admin_rules(self) -> list[dict]:
+        records = self.rules(include_disabled=True)
+        events: dict[str, list[dict]] = {}
+        for event in self.rule_admin_events():
+            events.setdefault(event["rule_id"], []).append(event)
+        for record in records:
+            record["admin_events"] = events.get(record["id"], [])
+            record["safe_pattern"] = self._rule_safety_error(record) is None
+            for field in ("pattern", "effect", "reason", "source"):
+                value = record.get(field)
+                if not isinstance(value, str):
+                    byte_count = len(value) if isinstance(value, bytes) else None
+                    record[field] = {
+                        "invalid_type": type(value).__name__,
+                        "sha256": _rule_field_sha256(value),
+                        "byte_count": byte_count,
+                    }
+        return records
+
+    def disable_rule(self, rule_id: str, *, reason: str) -> dict:
+        clean_reason = validate_rule_reason(reason)
+        event = None
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM rules WHERE id=?", (rule_id,)).fetchone()
+            if not row:
+                conn.rollback()
+                raise KeyError(f"unknown rule: {rule_id}")
+            record = dict(row)
+            latest = conn.execute(
+                """SELECT operation FROM rule_admin_events
+                WHERE rule_id=? ORDER BY created_at DESC LIMIT 1""",
+                (rule_id,),
+            ).fetchone()
+            needs_acknowledgment = bool(
+                latest and latest["operation"] == "auto-quarantine"
+            )
+            if record["enabled"] or needs_acknowledgment:
+                conn.execute("UPDATE rules SET enabled=0 WHERE id=?", (rule_id,))
+                event = self._rule_admin_event(
+                    conn,
+                    record,
+                    operation="operator-disable",
+                    reason=clean_reason,
+                )
+            conn.commit()
+        if event:
+            self.mirror_rule_admin_events()
+        return {
+            "status": "disabled" if event else "already_disabled",
+            "rule_id": rule_id,
+            "event": event,
+        }
+
+    def enable_rule(self, rule_id: str) -> dict:
+        event = None
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM rules WHERE id=?", (rule_id,)).fetchone()
+            if not row:
+                conn.rollback()
+                raise KeyError(f"unknown rule: {rule_id}")
+            record = dict(row)
+            error = self._rule_safety_error(record)
+            if error:
+                conn.rollback()
+                raise ValueError(
+                    "rule still fails current safe-pattern admission; create a "
+                    f"replacement rule instead: {error}"
+                )
+            if not record["enabled"]:
+                conn.execute("UPDATE rules SET enabled=1 WHERE id=?", (rule_id,))
+                event = self._rule_admin_event(
+                    conn,
+                    record,
+                    operation="operator-enable",
+                    reason="validated against current safe-pattern admission",
+                )
+            conn.commit()
+        if event:
+            self.mirror_rule_admin_events()
+        return {
+            "status": "enabled" if event else "already_enabled",
+            "rule_id": rule_id,
+            "event": event,
+        }
+
+    def rules(self, include_disabled: bool = False) -> list[dict]:
+        with self.connect() as conn:
+            where = "" if include_disabled else "WHERE enabled = 1"
+            rows = conn.execute(
+                f"SELECT * FROM rules {where} ORDER BY created_at"
+            ).fetchall()
         records = []
         for row in rows:
             record = dict(row)
@@ -1222,10 +1739,21 @@ class MemoryStore:
         value.setdefault("created_at", utc_now())
         self._append_jsonl(self.audit_path, value)
 
+    def append_audit_once(self, record: dict) -> bool:
+        """Append a stable-id audit receipt once across hook retries."""
+        value = dict(record)
+        value.setdefault("created_at", utc_now())
+        return self._append_jsonl_once(self.audit_path, value)
+
     def append_checkpoint(self, record: dict) -> None:
         value = dict(record)
         value.setdefault("created_at", utc_now())
         self._append_jsonl(self.checkpoints_path, value)
+
+    def append_checkpoint_once(self, record: dict) -> bool:
+        value = dict(record)
+        value.setdefault("created_at", utc_now())
+        return self._append_jsonl_once(self.checkpoints_path, value)
 
     def recent_audit(self, limit: int = 50) -> list[dict]:
         return self._read_jsonl(self.audit_path)[-limit:]

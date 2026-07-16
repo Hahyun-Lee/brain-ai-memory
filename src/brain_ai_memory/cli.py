@@ -12,6 +12,7 @@ from pathlib import Path
 from . import __version__
 from .config import resolve_home
 from .control import serve
+from .integrations import loop_connection_change, loop_connection_status
 from .privacy import permission_issues
 from .runtime import BrainAIRuntime
 from .storage import LIFECYCLE_OPERATIONS
@@ -28,6 +29,11 @@ from .workspace import (
     safe_display,
     save_audit,
     save_review,
+)
+
+CONNECTION_INSTALL_HINT = (
+    "install agent connection support from the repository checkout with "
+    "python -m pip install '.[mcp]'"
 )
 
 
@@ -61,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("audit_id")
     review.add_argument("--approve-ready", action="store_true", help="approve unambiguous semantic/episodic entries and skip exact duplicates")
     review.add_argument("--set", action="append", default=[], metavar="ITEM=ACTION", help="ACTION is semantic, episodic, state, or skip")
-    review.add_argument("--rule", action="append", default=[], metavar="ITEM=REGEX", help="explicitly enable an imported procedural rule")
+    review.add_argument("--rule", action="append", default=[], metavar="ITEM=SAFE_PATTERN", help="explicitly enable an imported procedural rule using the bounded safe pattern subset")
     review.add_argument("--rule-effect", choices=("warn", "block"), default="warn")
     review.add_argument("--supersede", action="append", default=[], metavar="ITEM=MEMORY_ID", help="replace one active semantic record while retaining its history")
     review.add_argument("--json", action="store_true")
@@ -76,18 +82,30 @@ def build_parser() -> argparse.ArgumentParser:
     rollback.add_argument("--yes", action="store_true")
     rollback.add_argument("--json", action="store_true")
 
-    connect = sub.add_parser("connect", help="preview or add a project-scoped MCP connection")
+    connect = sub.add_parser("connect", help="preview or connect Brain-AI Memory to an agent")
     connect.add_argument("host", choices=("codex", "claude-code"))
     connect.add_argument("--entity", required=True)
     connect.add_argument("--scope", choices=("project", "user"), default="project")
+    connect.add_argument(
+        "--mode",
+        choices=("tools", "loop"),
+        default="tools",
+        help="tools: on-demand memory tools; loop: opt-in automatic recall and checkpoints",
+    )
     connect.add_argument("--project-root", default=".")
     connect.add_argument("--apply", action="store_true", help="write the shown host-config change")
     connect.add_argument("--json", action="store_true")
 
-    disconnect = sub.add_parser("disconnect", help="preview or remove the managed MCP connection")
+    disconnect = sub.add_parser("disconnect", help="preview or remove a managed agent connection")
     disconnect.add_argument("host", choices=("codex", "claude-code"))
     disconnect.add_argument("--entity", default="", help="optional label retained in preview commands")
     disconnect.add_argument("--scope", choices=("project", "user"), default="project")
+    disconnect.add_argument(
+        "--mode",
+        choices=("tools", "loop"),
+        default="tools",
+        help="remove the on-demand tools connection or the full autonomous loop",
+    )
     disconnect.add_argument("--project-root", default=".")
     disconnect.add_argument("--apply", action="store_true")
     disconnect.add_argument("--json", action="store_true")
@@ -99,7 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     remember.add_argument("--tags", nargs="*", default=[])
     remember.add_argument("--entity", action="append", default=[], help="entity id, name, or alias; repeatable")
     remember.add_argument("--promote", choices=("semantic", "rule"))
-    remember.add_argument("--pattern", help="regular expression for a procedural rule")
+    remember.add_argument("--pattern", help="bounded safe-pattern subset for a procedural rule")
     remember.add_argument("--effect", choices=("block", "warn"), default="block")
     remember.add_argument("--key")
     remember.add_argument("--value")
@@ -174,12 +192,38 @@ def build_parser() -> argparse.ArgumentParser:
     lifecycle.add_argument("--reason", default="")
     lifecycle.add_argument("--json", action="store_true")
 
+    rule = sub.add_parser("rule", help="inspect or change stored procedural rules")
+    rule_sub = rule.add_subparsers(dest="rule_command", required=True)
+    rule_list = rule_sub.add_parser(
+        "list", help="show active, disabled, and automatically quarantined rules"
+    )
+    rule_list.add_argument("--json", action="store_true")
+    rule_disable = rule_sub.add_parser(
+        "disable", help="disable one rule without deleting its history"
+    )
+    rule_disable.add_argument("rule_id")
+    rule_disable.add_argument("--reason", default="operator request")
+    rule_disable.add_argument("--yes", action="store_true")
+    rule_disable.add_argument("--json", action="store_true")
+    rule_enable = rule_sub.add_parser(
+        "enable", help="re-enable one rule only if it passes current safety checks"
+    )
+    rule_enable.add_argument("rule_id")
+    rule_enable.add_argument("--yes", action="store_true")
+    rule_enable.add_argument("--json", action="store_true")
+
     status = sub.add_parser("status", help="show component counts and runtime health")
     status.add_argument("--json", action="store_true")
 
     doctor = sub.add_parser("doctor", help="check local configuration and adapter readiness")
     doctor.add_argument("--host", choices=("codex", "claude-code"))
     doctor.add_argument("--scope", choices=("project", "user"), default="project")
+    doctor.add_argument(
+        "--mode",
+        choices=("tools", "loop"),
+        default="tools",
+        help="check on-demand tools or the opt-in autonomous loop",
+    )
     doctor.add_argument("--project-root", default=".")
     doctor.add_argument("--entity", help="also require this configured default entity")
     doctor.add_argument("--json", action="store_true")
@@ -234,6 +278,11 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_serve.add_argument("--host", default="127.0.0.1")
     mcp_serve.add_argument("--port", type=int, default=8000)
     mcp_serve.add_argument("--entity", default="", help="default entity scope")
+    mcp_serve.add_argument(
+        "--locked-entity",
+        default="",
+        help="entity scope that calls served by this process cannot override",
+    )
     return parser
 
 
@@ -253,6 +302,7 @@ def doctor(
     scope: str = "project",
     project_root: str | Path = ".",
     entity: str | None = None,
+    mode: str = "tools",
 ) -> dict:
     semantic = runtime.config.get("semantic", {})
     vault = semantic.get("vault_path")
@@ -286,25 +336,81 @@ def doctor(
         "permission_warnings": privacy_warnings,
         "ontology_valid": runtime.ontology_summary["component_count"] > 0,
     }
+    quarantined_rules = runtime.store.applicable_rule_quarantines(entity)
+    checks["quarantined_rule_count"] = len(quarantined_rules)
+    checks["quarantined_rule_ids"] = [rule["id"] for rule in quarantined_rules]
     checks["ready"] = (
         checks["home_exists"]
         and checks["database_exists"]
         and checks["private_permissions"]
         and checks["runtime_home_git_ignored"]
         and checks["ontology_valid"]
+        and not quarantined_rules
     )
     if host:
-        checks["connection"] = connection_status(
-            runtime.home,
-            host,
-            scope=scope,
-            project_root=project_root,
-            entity=entity,
-        )
-        checks["ready"] = (
-            checks["ready"]
-            and checks["mcp_support_installed"]
-            and checks["connection"]["configured"]
+        if mode == "loop":
+            checks["connection"] = loop_connection_status(
+                runtime.home,
+                host,
+                scope=scope,
+                project_root=project_root,
+                entity=entity,
+            )
+            checks["configured"] = checks["connection"]["configured"]
+            checks["active"] = checks["connection"]["active"]
+            checks["ready"] = (
+                checks["ready"]
+                and checks["mcp_support_installed"]
+                and checks["connection"]["active"]
+            )
+            if checks["configured"] and not checks["active"]:
+                loop_error = checks["connection"]["lifecycle"].get("loop_error")
+                if loop_error:
+                    checks["next_action"] = (
+                        "inspect the automatic-session error, then retry the failed "
+                        f"host event: {loop_error}"
+                    )
+                else:
+                    checks["next_action"] = (
+                        "review the project hooks with /hooks, then start a new Codex session"
+                        if host == "codex"
+                        else "approve the project hooks, then start a new Claude Code session"
+                    )
+            elif not checks["configured"]:
+                checks["next_action"] = (
+                    f"preview: brain-ai connect {host} --entity <project> "
+                    "--mode loop"
+                )
+        else:
+            checks["connection"] = connection_status(
+                runtime.home,
+                host,
+                scope=scope,
+                project_root=project_root,
+                entity=entity,
+            )
+            checks["ready"] = (
+                checks["ready"]
+                and checks["mcp_support_installed"]
+                and checks["connection"]["configured"]
+            )
+            checks["migration_required"] = checks["connection"].get(
+                "migration_required", False
+            )
+            if checks["migration_required"]:
+                checks["next_action"] = (
+                    "upgrade the managed project connection to locked entity scope: "
+                    + checks["connection"]["migration_command"]
+                )
+        if not checks["mcp_support_installed"]:
+            checks["next_action"] = CONNECTION_INSTALL_HINT
+    if quarantined_rules:
+        checks["ready"] = False
+        checks["next_action"] = (
+            f"review {len(quarantined_rules)} quarantined legacy rule(s) with "
+            f"brain-ai --home {shlex.quote(str(runtime.home))} rule list --json; "
+            "create safe replacements with brain-ai remember --type rule, then "
+            "acknowledge each old rule with brain-ai rule disable RULE_ID --yes"
         )
     return checks
 
@@ -316,7 +422,7 @@ def run_demo(runtime: BrainAIRuntime) -> dict:
     runtime.store.set_state("atlas_open_reviews", 3, source="demo")
     existing = [rule for rule in runtime.store.rules() if rule["source"] == "demo"]
     rule = existing[0] if existing else runtime.store.add_rule(
-        r"deploy\s+atlas", effect="warn", reason="confirm that the release review is complete", source="demo"
+        r"deploy atlas", effect="warn", reason="confirm that the release review is complete", source="demo"
     )
     episode = runtime.store.append_event(
         "The Atlas release window moved from Friday to Thursday.",
@@ -354,7 +460,7 @@ def run_tour(runtime: BrainAIRuntime) -> dict:
     existing_rules = [rule for rule in runtime.store.rules() if rule["source"] == "tour"]
     if not existing_rules:
         runtime.store.add_rule(
-            r"deploy\s+production",
+            r"deploy production",
             effect="block",
             reason="release approval is required before production deployment",
             source="tour",
@@ -515,13 +621,57 @@ def emit_connection(value: dict, as_json: bool) -> None:
     if as_json:
         emit(value, True)
         return
-    print(f"{value['host']} {value['status']}: {value['path']}")
+    path = value.get("path") or value.get("lifecycle", {}).get("hook_config")
+    label = f"{value.get('mode', 'tools')} mode"
+    print(f"{value['host']} {label} {value['status']}: {path}")
     if value["diff"]:
         print(value["diff"], end="" if value["diff"].endswith("\n") else "\n")
     elif not value["changed"]:
         print("No configuration change needed.")
     if value.get("next"):
         print(f"Next: {value['next']}")
+
+
+def emit_doctor(value: dict, as_json: bool) -> None:
+    if as_json:
+        emit(value, True)
+        return
+    print(f"Brain-AI Memory: {'ready' if value['ready'] else 'attention needed'}")
+    print(
+        "Local store: "
+        + ("ready" if value["home_exists"] and value["database_exists"] else "not ready")
+    )
+    if "connection" in value:
+        connection = value["connection"]
+        if connection.get("mode") == "loop":
+            print(
+                "Automatic session memory: "
+                f"configured={'yes' if value.get('configured') else 'no'}, "
+                f"active={'yes' if value.get('active') else 'no'}"
+            )
+            errors = [
+                connection.get("mcp", {}).get("error"),
+                connection.get("lifecycle", {}).get("error"),
+            ]
+        else:
+            print(
+                "Agent connection: "
+                + ("configured" if connection.get("configured") else "not configured")
+            )
+            errors = [connection.get("error")]
+        for error in errors:
+            if error:
+                print(f"Problem: {error}")
+        print(
+            "Agent connection support: "
+            + ("installed" if value["mcp_support_installed"] else "missing")
+        )
+    for warning in value.get("permission_warnings", []):
+        print(f"Permission warning: {warning}")
+    if value.get("quarantined_rule_count"):
+        print(f"Quarantined legacy rules: {value['quarantined_rule_count']}")
+    if value.get("next_action"):
+        print(f"Next: {value['next_action']}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -575,6 +725,12 @@ def main(argv: list[str] | None = None) -> int:
             emit(rollback_batch(home, runtime.store, args.batch_or_review_id), args.json)
             return 0
         if args.subcommand in {"connect", "disconnect"}:
+            if (
+                args.subcommand == "connect"
+                and args.apply
+                and importlib.util.find_spec("mcp") is None
+            ):
+                raise ValueError(CONNECTION_INSTALL_HINT)
             if args.subcommand == "connect" and args.apply:
                 runtime = BrainAIRuntime(home)
                 try:
@@ -583,15 +739,26 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValueError(
                         "entity does not exist in the typed store; apply an audit or run brain-ai entity add first"
                     ) from exc
-            value = connection_change(
-                home,
-                args.host,
-                entity=args.entity,
-                scope=args.scope,
-                project_root=args.project_root,
-                disconnect=args.subcommand == "disconnect",
-                apply=args.apply,
-            )
+            if args.mode == "loop":
+                value = loop_connection_change(
+                    home,
+                    args.host,
+                    entity=args.entity,
+                    scope=args.scope,
+                    project_root=args.project_root,
+                    disconnect=args.subcommand == "disconnect",
+                    apply=args.apply,
+                )
+            else:
+                value = connection_change(
+                    home,
+                    args.host,
+                    entity=args.entity,
+                    scope=args.scope,
+                    project_root=args.project_root,
+                    disconnect=args.subcommand == "disconnect",
+                    apply=args.apply,
+                )
             emit_connection(value, args.json)
             return 0
 
@@ -634,6 +801,24 @@ def main(argv: list[str] | None = None) -> int:
                     entity=(args.entity or [None])[0],
                 )
             emit(value, args.json)
+        elif args.subcommand == "rule":
+            if args.rule_command == "list":
+                emit(runtime.store.admin_rules(), args.json)
+            elif args.rule_command == "disable":
+                if not args.yes:
+                    raise ValueError(
+                        "rule disable changes enforcement; rerun with --yes"
+                    )
+                emit(
+                    runtime.store.disable_rule(args.rule_id, reason=args.reason),
+                    args.json,
+                )
+            else:
+                if not args.yes:
+                    raise ValueError(
+                        "rule enable changes enforcement; rerun with --yes"
+                    )
+                emit(runtime.store.enable_rule(args.rule_id), args.json)
         elif args.subcommand == "recall":
             emit(
                 runtime.recall(
@@ -714,13 +899,14 @@ def main(argv: list[str] | None = None) -> int:
         elif args.subcommand == "status":
             emit(runtime.status(), args.json)
         elif args.subcommand == "doctor":
-            emit(
+            emit_doctor(
                 doctor(
                     runtime,
                     args.host,
                     scope=args.scope,
                     project_root=args.project_root,
                     entity=args.entity,
+                    mode=args.mode,
                 ),
                 args.json,
             )
@@ -763,6 +949,7 @@ def main(argv: list[str] | None = None) -> int:
                 host=args.host,
                 port=args.port,
                 default_entity=args.entity,
+                locked_entity=args.locked_entity,
             )
             server.run(transport=args.transport)
         return 0

@@ -92,7 +92,7 @@ brain-ai review audit_0123456789abcdef --approve-ready
 brain-ai review audit_0123456789abcdef \
   --set item_a1b2c3d4e5f60708=state \
   --set item_b1c2d3e4f5061728=episodic \
-  --rule 'item_c1d2e3f405162738=deploy\s+production' --rule-effect block \
+  --rule 'item_c1d2e3f405162738=deploy production' --rule-effect block \
   --supersede item_d1e2f30415263748=mem_1234abcd5678
 ```
 
@@ -222,8 +222,17 @@ brain-ai remember --type semantic --entity "Atlas 2.1" \
   --text "Production releases require review"
 brain-ai remember --type state --entity "Atlas 2.1" --key open_reviews --value 3
 brain-ai remember --type rule --entity "Atlas 2.1" \
-  --pattern 'deploy\s+production' --text "approval required"
+  --pattern 'deploy production' --text "approval required"
 ```
+
+Procedural rules deliberately use a bounded safe-pattern subset, not arbitrary
+Python regular expressions. Literal text, character classes, alternatives, and
+exact repeats are supported. A pattern may contain at most one non-exact
+quantifier; if it does, it must begin with `^` or `\A` and cannot use multiline
+mode. Nested quantifiers, backreferences, quantified alternatives/lookarounds,
+patterns over 1,024 bytes, actions over 16 KiB, and more than 256 applicable
+rules fail closed. Prefer a literal substring such as `deploy production`
+unless regex syntax is actually needed.
 
 Route and recall an auditable candidate bundle for any model or agent client:
 

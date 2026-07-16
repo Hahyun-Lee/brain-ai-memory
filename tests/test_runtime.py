@@ -4,17 +4,26 @@ import json
 import asyncio
 import sys
 import os
+import re
+import sqlite3
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
 from brain_ai_memory.adapters import SmartConnectionsAdapter, VaultBM25Adapter
-from brain_ai_memory.cli import run_tour
+from brain_ai_memory.cli import doctor, main as cli_main, run_tour
 from brain_ai_memory.mcp_server import MCPUnavailableError, main as mcp_main
 from brain_ai_memory.runtime import BrainAIRuntime
+from brain_ai_memory.storage import (
+    MAX_ACTIVE_RULES,
+    MAX_RULE_ACTION_BYTES,
+    MAX_RULE_PATTERN_BYTES,
+    MAX_RULE_REASON_BYTES,
+    MemoryStore,
+)
 
 
 class RuntimeTest(unittest.TestCase):
@@ -30,7 +39,7 @@ class RuntimeTest(unittest.TestCase):
         self.runtime.store.put_knowledge("배포 전에는 코드 리뷰가 완료되어야 한다", source="test")
         self.runtime.store.append_event("배포 일정이 금요일에서 목요일로 변경되었다", source="test")
         self.runtime.store.set_state("open_reviews", 3, source="test")
-        self.runtime.store.add_rule(r"deploy\s+production", reason="approval required", source="test")
+        self.runtime.store.add_rule(r"deploy production", reason="approval required", source="test")
 
         result = self.runtime.process(
             "최근 배포 규칙과 open review 개수는?",
@@ -42,6 +51,237 @@ class RuntimeTest(unittest.TestCase):
         self.assertIn("HC", result["route"])
         self.assertTrue(result["memory"]["ATL"])
         self.assertEqual(result["memory"]["IPS"][0]["value"], 3)
+
+    def test_rule_patterns_reject_backtracking_hazards_at_creation(self):
+        pathological = r"(a+)+$"
+        self.assertIsNotNone(re.compile(pathological))
+
+        unsafe = (
+            pathological,
+            r"(a|aa)+$",
+            r"(a+)\1",
+            r"a*a*a*b",
+            r"a+$",
+            r"deploy\s+(production|staging)",
+            r"(?m)^a+$",
+            "a" * (MAX_RULE_PATTERN_BYTES + 1),
+        )
+        for pattern in unsafe:
+            with self.subTest(pattern=pattern[:40]):
+                with self.assertRaises(ValueError):
+                    self.runtime.store.add_rule(
+                        pattern,
+                        reason="must be safe to evaluate",
+                        source="test",
+                    )
+
+        with self.assertRaisesRegex(ValueError, "rule reason exceeds"):
+            self.runtime.store.add_rule(
+                "safe literal",
+                reason="x" * (MAX_RULE_REASON_BYTES + 1),
+                source="test",
+            )
+
+        ordinary = self.runtime.store.add_rule(
+            r"^deploy\s+(production|staging)",
+            reason="approval required",
+            source="test",
+        )
+        self.assertEqual(ordinary["pattern"], r"^deploy\s+(production|staging)")
+        self.assertFalse(self.runtime.gate("deploy production")["allowed"])
+
+    def test_legacy_unsafe_rule_and_oversized_action_fail_closed(self):
+        with self.runtime.store.connect() as conn:
+            conn.execute(
+                """INSERT INTO rules
+                (id, pattern, effect, reason, source, enabled, created_at)
+                VALUES (?, ?, ?, ?, ?, 1, ?)""",
+                (
+                    "rule_legacy_unsafe",
+                    r"(a+)+$",
+                    "warn",
+                    "legacy unsafe expression",
+                    "legacy",
+                    "2026-01-01T00:00:00+00:00",
+                ),
+            )
+
+        legacy = self.runtime.gate("a" * 20 + "!")
+        self.assertFalse(legacy["allowed"])
+        self.assertEqual(legacy["effect"], "block")
+        self.assertEqual(legacy["rule_id"], "rule_legacy_unsafe")
+        self.assertIn("cannot be evaluated safely", legacy["reason"])
+
+        oversized = self.runtime.gate("x" * (MAX_RULE_ACTION_BYTES + 1))
+        self.assertFalse(oversized["allowed"])
+        self.assertEqual(oversized["rule_id"], "safety-bound")
+        self.assertIn("procedural safety limit", oversized["reason"])
+
+        with self.runtime.store.connect() as conn:
+            conn.execute("DELETE FROM rules")
+        for index in range(MAX_ACTIVE_RULES + 1):
+            self.runtime.store.add_rule(
+                f"bounded-rule-{index}",
+                reason="bounded rule count",
+            )
+        too_many = self.runtime.gate("ordinary command")
+        self.assertFalse(too_many["allowed"])
+        self.assertEqual(too_many["rule_id"], "safety-bound")
+        self.assertIn("rule safety limit", too_many["reason"])
+
+    def test_corrupted_rule_fields_fail_closed_and_upgrade_without_crashing(self):
+        with self.runtime.store.connect() as conn:
+            conn.execute(
+                """INSERT INTO rules
+                (id, pattern, effect, reason, source, enabled, created_at)
+                VALUES ('rule_invalid_effect', 'ordinary', 'allow',
+                        'invalid legacy effect', 'legacy', 1, ?)""",
+                ("2026-01-01T00:00:00+00:00",),
+            )
+        invalid_effect = self.runtime.gate("unrelated command")
+        self.assertFalse(invalid_effect["allowed"])
+        self.assertEqual(invalid_effect["rule_id"], "rule_invalid_effect")
+
+        with self.runtime.store.connect() as conn:
+            conn.execute("DELETE FROM rules")
+            conn.execute(
+                """INSERT INTO rules
+                (id, pattern, effect, reason, source, enabled, created_at)
+                VALUES ('rule_invalid_types', ?, 'block', ?, 'legacy', 1, ?)""",
+                (
+                    sqlite3.Binary(b"\xffunsafe-pattern"),
+                    sqlite3.Binary(b"\xffunsafe-reason"),
+                    "2026-01-01T00:00:00+00:00",
+                ),
+            )
+        upgraded = BrainAIRuntime(self.home)
+        quarantines = upgraded.store.unresolved_rule_quarantines()
+        self.assertEqual([item["id"] for item in quarantines], ["rule_invalid_types"])
+        self.assertFalse(upgraded.gate("ordinary command")["allowed"])
+
+        output = StringIO()
+        with redirect_stdout(output):
+            return_code = cli_main(
+                ["--home", str(self.home), "rule", "list", "--json"]
+            )
+        self.assertEqual(return_code, 0)
+        listed = json.loads(output.getvalue())
+        invalid = next(item for item in listed if item["id"] == "rule_invalid_types")
+        self.assertEqual(invalid["pattern"]["invalid_type"], "bytes")
+        self.assertEqual(invalid["reason"]["invalid_type"], "bytes")
+        self.assertNotIn("unsafe-pattern", output.getvalue())
+
+    def test_upgrade_quarantines_legacy_rule_and_exposes_admin_remediation(self):
+        legacy_id = "rule_v05_first_party"
+        with self.runtime.store.connect() as conn:
+            conn.execute(
+                """INSERT INTO rules
+                (id, pattern, effect, reason, source, enabled, created_at)
+                VALUES (?, ?, 'block', ?, 'v0.5', 1, ?)""",
+                (
+                    legacy_id,
+                    r"^git\s+push\s+--force$",
+                    "force push requires approval",
+                    "2026-01-01T00:00:00+00:00",
+                ),
+            )
+
+        upgraded = BrainAIRuntime(self.home)
+        stored = next(
+            rule
+            for rule in upgraded.store.admin_rules()
+            if rule["id"] == legacy_id
+        )
+        self.assertTrue(stored["enabled"])
+        self.assertFalse(stored["safe_pattern"])
+        self.assertEqual(
+            stored["admin_events"][-1]["operation"],
+            "auto-quarantine",
+        )
+        quarantined_gate = upgraded.gate("ordinary command")
+        self.assertFalse(quarantined_gate["allowed"])
+        self.assertEqual(quarantined_gate["rule_id"], legacy_id)
+
+        checks = doctor(upgraded)
+        self.assertFalse(checks["ready"])
+        self.assertEqual(checks["quarantined_rule_ids"], [legacy_id])
+        self.assertIn("rule list", checks["next_action"])
+
+        output = StringIO()
+        with redirect_stdout(output):
+            return_code = cli_main(
+                ["--home", str(self.home), "rule", "list", "--json"]
+            )
+        self.assertEqual(return_code, 0)
+        listed = json.loads(output.getvalue())
+        self.assertEqual(
+            next(rule for rule in listed if rule["id"] == legacy_id)["enabled"],
+            1,
+        )
+
+        replacement = upgraded.store.add_rule(
+            "git push --force",
+            reason="force push requires approval",
+            source="v0.6 replacement",
+        )
+        acknowledged = upgraded.store.disable_rule(
+            legacy_id,
+            reason=f"replaced by {replacement['id']}",
+        )
+        self.assertEqual(acknowledged["status"], "disabled")
+        self.assertEqual(upgraded.store.unresolved_rule_quarantines(), [])
+        self.assertTrue(doctor(upgraded)["ready"])
+
+        safe = upgraded.store.add_rule(
+            "safe deploy",
+            reason="review deployment",
+            source="test",
+        )
+        disabled = upgraded.store.disable_rule(
+            safe["id"], reason="maintenance"
+        )
+        enabled = upgraded.store.enable_rule(safe["id"])
+        self.assertEqual(disabled["status"], "disabled")
+        self.assertEqual(enabled["status"], "enabled")
+
+    def test_rule_quarantine_remains_enforced_when_audit_mirror_is_unavailable(self):
+        legacy_id = "rule_v05_audit_outbox"
+        with self.runtime.store.connect() as conn:
+            conn.execute(
+                """INSERT INTO rules
+                (id, pattern, effect, reason, source, enabled, created_at)
+                VALUES (?, ?, 'block', ?, 'v0.5', 1, ?)""",
+                (
+                    legacy_id,
+                    r"^git\s+push\s+--force$",
+                    "force push requires approval",
+                    "2026-01-01T00:00:00+00:00",
+                ),
+            )
+
+        with patch.object(
+            MemoryStore,
+            "append_audit_once",
+            side_effect=RuntimeError("audit mirror unavailable"),
+        ):
+            upgraded = BrainAIRuntime(self.home)
+
+        verdict = upgraded.gate("ordinary command")
+        self.assertFalse(verdict["allowed"])
+        self.assertEqual(verdict["rule_id"], legacy_id)
+        self.assertEqual(
+            [item["id"] for item in upgraded.store.unresolved_rule_quarantines()],
+            [legacy_id],
+        )
+
+        recovered = BrainAIRuntime(self.home)
+        audits = [
+            item
+            for item in recovered.store.recent_audit(20)
+            if item.get("event") == "rule_admin"
+        ]
+        self.assertEqual(len(audits), 1)
+        self.assertEqual(audits[0]["rule_id"], legacy_id)
 
     def test_builtin_gate_blocks_and_harness_runs_safe_command(self):
         blocked = self.runtime.execute("unsafe", ["rm", "-rf", "/"])
@@ -242,7 +482,7 @@ class RuntimeTest(unittest.TestCase):
         self.runtime.store.set_state("open_reviews", 7, entity=boreal["id"])
         self.runtime.store.set_state("open_reviews", 99)
         self.runtime.store.add_rule(
-            r"deploy\s+production",
+            r"deploy production",
             reason="Atlas approval required",
             entities=[atlas["id"]],
         )

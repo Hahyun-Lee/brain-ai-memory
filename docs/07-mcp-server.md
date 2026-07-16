@@ -38,8 +38,10 @@ brain-ai connect claude-code --entity Atlas --project-root . --apply
 
 Project scope is the default. The command writes a marked managed block to
 `.codex/config.toml` or a managed server entry to `.mcp.json`, pinning the
-current Python interpreter, absolute Brain-AI home, and default entity. These
-paths are machine-local and should be reviewed before committing. It refuses
+current Python interpreter, absolute Brain-AI home, and **locked project
+entity**. Calls served by that project connection cannot override the entity,
+so a prompt or tool call cannot silently cross into another project's memory.
+These paths are machine-local and should be reviewed before committing. It refuses
 conflicting unmanaged entries and backs up a non-empty config before applying a
 change. A preview displays only a sanitized view of the managed
 `brain-ai-memory` entry; unexpected environment data is redacted and unrelated
@@ -58,8 +60,11 @@ brain-ai disconnect claude-code --entity Atlas --project-root .
 brain-ai disconnect claude-code --entity Atlas --project-root . --apply
 ```
 
-Use `--scope user` only when a user-level connection is intentional. A manual
-client configuration is typically equivalent to:
+Use `--scope user` only when a user-level, tools-only connection is intentional.
+Unlike project scope, the generated user connection uses `--entity` as an
+overridable default, because one user-level server may deliberately serve more
+than one entity. Autonomous loop mode remains project-only. A manual client
+configuration is typically equivalent to:
 
 ```json
 {
@@ -79,6 +84,19 @@ client configuration is typically equivalent to:
 Use the absolute Python interpreter from the environment where the package and
 MCP extra are installed, plus an absolute home path, so the host does not depend
 on an activated shell and the client and CLI share the same state.
+
+Managed project connections created before v0.6 used the same overridable
+`--entity` form. `brain-ai doctor --host codex|claude-code --entity Atlas
+--project-root .` reports `migration_required` and prints the exact
+`brain-ai ... connect ... --apply` command that rewrites only the owned entry to
+`--locked-entity`. Preview that connection command without `--apply` first when
+you want to inspect the diff.
+
+For automatic start-of-session recall and dirty-only checkpoints, add `--mode
+loop` to the project connection command and follow the [autonomous loop
+guide](08-autonomous-loop.md). Applying loop mode is refused before any host
+configuration is changed when an applicable global or project-scoped legacy
+rule is quarantined; `rule list` and `doctor` provide the remediation path.
 
 This and the following manual or client-created entries are intentionally
 **unmanaged**.
@@ -169,10 +187,10 @@ an existing `MEMORY.md`; use the explicit, hash-guarded CLI workflow documented
 in [the runtime guide](05-runtime.md). A source-hash or typed-store-revision
 conflict is a refused operation with CLI exit status 3, not an automatic merge.
 
-## Host-owned integration pattern
+## Host-owned tools-only integration pattern
 
-An integrating host can close the following loop; the server does not schedule
-or execute it automatically:
+In the default `--mode tools` connection, an integrating host can close the
+following loop; the server does not schedule or execute it automatically:
 
 1. At session start, call `brain_resume` for the active entity when a prior
    handoff may exist. Treat `status: not_found` as a normal first-run result,
@@ -194,11 +212,13 @@ or execute it automatically:
    Supersede stale knowledge only with the active entity; the old fact must
    already be bound to that scope.
 
-This is a host integration pattern, not a shipped autonomous loop and not a
-replacement for the host model's conversation history. Framework session stores
-continue to own chat transcripts; the host must select what to write into
-Brain-AI's differentiated operational memory. Action policy remains advisory
-unless the host wires an enforcement boundary.
+This tools-only pattern is not a replacement for the host model's conversation
+history. Framework session stores continue to own chat transcripts; the host
+must select what to write into Brain-AI's differentiated operational memory.
+Action policy remains advisory unless the host wires an enforcement boundary.
+The separate project-only `--mode loop` integration automates bounded recall,
+selected artifact-event capture, and dirty-only checkpoints; it still does not
+store raw transcripts or infer durable truth from model output.
 
 `brain_resume` reads the newest scoped handoff; before the first handoff it
 returns `status: not_found`, an empty summary, and an empty `next_actions` list.

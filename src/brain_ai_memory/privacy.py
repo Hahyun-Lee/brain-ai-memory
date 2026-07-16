@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import stat
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Iterator
 
 
 PRIVATE_DIRECTORY_MODE = 0o700
@@ -101,6 +102,40 @@ def open_private_lock(path: Path) -> BinaryIO:
         descriptor = os.open(path, os.O_RDWR | nofollow | nonblock)
     _require_regular_descriptor(descriptor, path)
     return os.fdopen(descriptor, "a+b")
+
+
+@contextlib.contextmanager
+def exclusive_file_lock(handle: BinaryIO) -> Iterator[None]:
+    """Hold an interprocess lock for one private lock-file handle.
+
+    POSIX ``flock`` can lock an empty file, while Windows ``msvcrt.locking``
+    locks a byte range starting at the current file position.  Keep one byte in
+    the lock file and always lock byte zero so both implementations protect the
+    same critical section.
+    """
+    handle.seek(0, os.SEEK_END)
+    if handle.tell() == 0:
+        handle.write(b"\0")
+        handle.flush()
+        os.fsync(handle.fileno())
+    handle.seek(0)
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - exercised with a simulated Windows module
+        import msvcrt
+
+        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def permission_issues(home: Path, files: list[Path]) -> list[str]:

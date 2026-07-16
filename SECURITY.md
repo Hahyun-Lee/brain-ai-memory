@@ -10,9 +10,13 @@ Include the affected file or template, the unsafe behavior, the smallest
 reproduction you can provide, and whether the issue applies to the generic
 public artifact or only to a particular downstream harness.
 
-The runnable hooks in this repository are templates. Adopters are responsible
-for testing their event adapter, allow/deny policy, false-positive behavior, and
-failure mode before enabling a blocking rule in a live agent.
+The repository contains both reusable hook examples and an optional, installable
+automatic-session loop. `brain-ai connect ... --mode loop --apply` writes only
+project-scoped host configuration and binds each installed hook to one explicit
+project root, Brain-AI home, and entity. Review the preview and the host's trust
+prompt before enabling it. Test allow/deny policy, false-positive behavior, and
+failure modes before relying on a blocking rule in live work. See
+[Automatic session memory](docs/08-autonomous-loop.md).
 
 The reference runtime is an alpha local implementation. Its observer has no
 authentication and binds to `127.0.0.1` by default. Do not expose it directly to
@@ -45,11 +49,12 @@ accepts only decisions saved by `brain-ai review`, requires `--yes`, and refuses
 the first operation if the source hash or logical store revision changed after
 review. A completed review remains an idempotent receipt lookup and reports if
 its source subsequently changed; it never repeats the import.
-Rules require an explicit regular expression; exact state requires an explicit
-key/value entry. Project-scoped supersession cannot deactivate global memory or
-a record linked only to another project. Imported provenance may contain
-sensitive paths and text. A newly created runtime uses owner-only directory and
-file modes on POSIX systems and writes `.brain-ai/.gitignore`; `brain-ai doctor`
+Rules require an explicit pattern from the bounded safe subset; exact state
+requires an explicit key/value entry. Project-scoped supersession cannot
+deactivate global memory or a record linked only to another project. Imported
+provenance may contain sensitive paths and text. A newly created runtime uses
+owner-only directory and file modes on POSIX systems and writes
+`.brain-ai/.gitignore`; `brain-ai doctor`
 reports a permissive existing store but does not silently change an intentional
 shared-store policy. The files are not encrypted. Do not commit or share
 `.brain-ai/`.
@@ -67,6 +72,27 @@ checks but cannot make the same concurrent path-swap guarantee.
 when provided, entity. Configuration backups
 under `.brain-ai/workflows/config-backups/` are retained until the operator
 applies a separate retention policy.
+
+Automatic-session hooks treat recalled memory and warning reasons as untrusted
+data rather than host instructions. A matched block is returned through the
+host's denial channel using a fixed message and rule identifier; stored rule
+prose is not promoted into that control channel. General hook failures are
+fail-soft and leave a short diagnostic, but a safely evaluated matching block
+remains fail-closed. Legacy rule patterns that cannot meet the current bounded
+pattern contract are registered for operator review and remain fail-closed
+until the operator explicitly replaces or disables them.
+
+By default, the loop does not persist raw prompts, raw tool output, assistant
+messages, or edited file contents. It does persist local plaintext typed memory,
+relative paths for supported edit targets, selected record identifiers, bounded
+event metadata, one-way hashes of host session and turn identifiers, and
+checkpoints. Explicit memory-writing calls store the content supplied to those
+calls. SQLite admissions are durable before their inspectable JSONL mirrors;
+interrupted mirrors are replayed idempotently by a later hook. Audit, episode,
+and checkpoint JSONL streams are append-only; SQLite retains coordination
+receipts and current delivery status. Neither store is pruned automatically.
+Apply an explicit local retention, backup, and secure-erasure policy appropriate
+to the project. Disconnecting does not delete `.brain-ai/`.
 
 Vault adapters stay within the configured canonical vault root. The local BM25
 fallback skips symbolic links, and Smart Connections results whose resolved

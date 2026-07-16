@@ -28,8 +28,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from brain_ai_memory.runtime import BrainAIRuntime
-from brain_ai_memory.text import ranked
+from brain_ai_memory.runtime import BrainAIRuntime  # noqa: E402
+from brain_ai_memory.text import ranked  # noqa: E402
 
 
 CASES = Path(__file__).with_name("component_ablation_cases.jsonl")
@@ -148,12 +148,12 @@ def seed(runtime: BrainAIRuntime) -> tuple[dict[str, str], list[dict]]:
     runtime.store.set_state("atlas_open_reviews", 3, source="benchmark")
     runtime.store.set_state("retry_failures", 7, source="benchmark")
     runtime.store.add_rule(
-        r"deploy\s+production",
+        "deploy production",
         reason="production deployment requires approval",
         source="benchmark",
     )
     runtime.store.add_rule(
-        r"publish\s+preview",
+        "publish preview",
         effect="warn",
         reason="preview publication should be announced",
         source="benchmark",
@@ -271,7 +271,7 @@ def _consolidation(runtime: BrainAIRuntime, case: dict, condition: Condition) ->
     scenario = case["scenario"]
     kwargs = {"promote_to": "semantic"}
     if scenario == "rule":
-        kwargs = {"promote_to": "rule", "rule_pattern": r"ship\s+release"}
+        kwargs = {"promote_to": "rule", "rule_pattern": "ship release"}
     event = runtime.store.append_event(
         "Approved release knowledge from repeated episodes.", source="benchmark", **kwargs
     )

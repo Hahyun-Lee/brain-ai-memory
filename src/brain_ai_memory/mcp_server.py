@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from . import __version__
 from .runtime import BrainAIRuntime
 
 
@@ -30,15 +31,39 @@ def create_mcp_server(
     host: str = "127.0.0.1",
     port: int = 8000,
     default_entity: str = "",
+    locked_entity: str = "",
 ):
     """Create an MCP server without starting a transport."""
+    if default_entity and locked_entity:
+        raise ValueError("use either default_entity or locked_entity, not both")
     FastMCP = _mcp_import()
     runtime = BrainAIRuntime(home)
+    locked_record = runtime.store.get_entity(locked_entity) if locked_entity else None
+    configured_entity = locked_entity or default_entity
+
+    def select_entity(requested: str = "", *, required: bool = False) -> str | None:
+        if locked_record:
+            if requested:
+                requested_record = runtime.store.get_entity(requested)
+                if requested_record["id"] != locked_record["id"]:
+                    raise ValueError(
+                        "this project connection is locked to "
+                        f"{locked_record['name']}"
+                    )
+            return locked_record["id"]
+        selected = requested or configured_entity
+        if required and not selected:
+            raise ValueError(
+                "entity is required when no default or locked entity is configured"
+            )
+        return selected or None
+
     server = FastMCP(
         "brain-ai-memory",
         instructions=(
             "Use brain_resume at the start of cross-session work, then brain_context "
             "before acting. Pass an entity unless this server has a configured default. "
+            "A project-locked server rejects another entity. "
             "Prefer exact state over estimates, stop when a requested gate returns "
             "allowed=false, and write brain_checkpoint at handoff. "
             "MCP deliberately does not expose arbitrary command execution; execute "
@@ -59,14 +84,14 @@ def create_mcp_server(
         return runtime.process(
             query,
             proposed_action=proposed_action or None,
-            entity=entity or default_entity or None,
+            entity=select_entity(entity),
             limit=limit,
         )
 
     @server.tool(name="brain_check_action")
     def check_action(action: str, entity: str = "") -> dict:
         """Return the deterministic allow, warn, or block verdict for an action."""
-        return runtime.gate(action, entity=entity or default_entity or None)
+        return runtime.gate(action, entity=select_entity(entity))
 
     @server.tool(name="brain_remember")
     def remember(
@@ -81,7 +106,7 @@ def create_mcp_server(
         promote_to: str = "",
     ) -> dict:
         """Write an event, fact, rule, or exact state into its owned store."""
-        selected_entity = entity or default_entity
+        selected_entity = select_entity(entity)
         entities = [selected_entity] if selected_entity else []
         if kind == "episodic":
             if not text:
@@ -118,19 +143,29 @@ def create_mcp_server(
             )
         raise ValueError("kind must be episodic, semantic, rule, or state")
 
-    @server.tool(name="brain_upsert_entity")
-    def upsert_entity(
-        name: str,
-        entity_type: str = "concept",
-        aliases: list[str] | None = None,
-    ) -> dict:
-        """Create or resolve a stable entity used to scope memory and state."""
-        return runtime.store.put_entity(name, entity_type=entity_type, aliases=aliases or [])
+    if not locked_record:
+        @server.tool(name="brain_upsert_entity")
+        def upsert_entity(
+            name: str,
+            entity_type: str = "concept",
+            aliases: list[str] | None = None,
+        ) -> dict:
+            """Create or resolve a stable entity used to scope memory and state."""
+            return runtime.store.put_entity(
+                name, entity_type=entity_type, aliases=aliases or []
+            )
 
-    @server.tool(name="brain_add_relation")
-    def add_relation(subject: str, predicate: str, object: str, source: str = "mcp") -> dict:
-        """Create a typed relation between two existing entities."""
-        return runtime.store.add_relation(subject, predicate, object, source=source)
+        @server.tool(name="brain_add_relation")
+        def add_relation(
+            subject: str,
+            predicate: str,
+            object: str,
+            source: str = "mcp",
+        ) -> dict:
+            """Create a typed relation between two existing entities."""
+            return runtime.store.add_relation(
+                subject, predicate, object, source=source
+            )
 
     @server.tool(name="brain_checkpoint")
     def checkpoint(
@@ -139,7 +174,7 @@ def create_mcp_server(
         next_actions: list[str] | None = None,
     ) -> dict:
         """Persist an entity-scoped handoff (or a legacy global checkpoint)."""
-        selected_entity = entity or default_entity
+        selected_entity = select_entity(entity)
         if selected_entity:
             return runtime.handoff(
                 selected_entity,
@@ -151,15 +186,14 @@ def create_mcp_server(
     @server.tool(name="brain_resume")
     def resume(entity: str = "") -> dict:
         """Return the latest handoff for exactly one entity."""
-        selected_entity = entity or default_entity
-        if not selected_entity:
-            raise ValueError("entity is required when no MCP default entity is configured")
+        selected_entity = select_entity(entity, required=True)
         return runtime.resume(selected_entity)
 
-    @server.tool(name="brain_consolidation_preview")
-    def consolidation_preview() -> dict:
-        """Preview episodic promotions; application remains an explicit local action."""
-        return runtime.consolidate(apply=False)
+    if not locked_record:
+        @server.tool(name="brain_consolidation_preview")
+        def consolidation_preview() -> dict:
+            """Preview all episodic promotions on an unlocked administrative server."""
+            return runtime.consolidate(apply=False)
 
     @server.tool(name="brain_supersede")
     def supersede(
@@ -169,11 +203,7 @@ def create_mcp_server(
         entity: str = "",
     ) -> dict:
         """Replace a stale fact within one explicit or default entity scope."""
-        selected_entity = entity or default_entity
-        if not selected_entity:
-            raise ValueError(
-                "entity is required for scoped supersession when no default is configured"
-            )
+        selected_entity = select_entity(entity, required=True)
         return runtime.reconsolidate(
             old_id,
             new_text,
@@ -183,7 +213,15 @@ def create_mcp_server(
 
     @server.resource("brain-ai://status", mime_type="application/json")
     def status_resource() -> str:
-        return json.dumps(runtime.status(), ensure_ascii=False, indent=2)
+        if locked_record:
+            value = {
+                "version": __version__,
+                "entity": locked_record,
+                "latest_handoff": runtime.resume(locked_record["id"]),
+            }
+        else:
+            value = runtime.status()
+        return json.dumps(value, ensure_ascii=False, indent=2)
 
     @server.resource("brain-ai://ontology", mime_type="application/json")
     def ontology_resource() -> str:
@@ -203,6 +241,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--entity", default="", help="default entity scope for this MCP server")
+    parser.add_argument(
+        "--locked-entity",
+        default="",
+        help="project entity scope that tool calls cannot override",
+    )
     args = parser.parse_args(argv)
     try:
         server = create_mcp_server(
@@ -210,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host,
             port=args.port,
             default_entity=args.entity,
+            locked_entity=args.locked_entity,
         )
     except MCPUnavailableError as exc:
         print(f"brain-ai-mcp: {exc}", file=sys.stderr)

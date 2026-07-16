@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.6.0 — 2026-07-16
+
+### Added
+
+- an opt-in, project-scoped automatic session loop for Codex and Claude Code,
+  installed with preview-first `connect ... --mode loop` wiring;
+- byte-bounded start and prompt recall, scoped handoff delivery and
+  acknowledgement, successful-edit metadata capture, and dirty-only idempotent
+  checkpoints at compaction, turn, or session boundaries;
+- project-private lifecycle bindings, `configured` versus observed `active`
+  diagnostics, and exact managed-hook ownership for safe upgrades and removal;
+- strict project locking for generated memory connections, including rejection
+  of cross-entity reads, writes, graph mutation, and global consolidation
+  surfaces; and
+- additive loop-ledger migrations plus cross-process exact-once JSONL receipts
+  with POSIX and Windows lock implementations.
+
+### Safety and privacy
+
+- raw prompts are used transiently for retrieval but are not persisted; raw
+  tool output, assistant messages, edited file contents, and inferred facts,
+  rules, state, or supersessions are not captured by the loop;
+- host session and turn identifiers are persisted only as one-way hashes;
+- injected records carry source identifiers, a data-not-instructions envelope,
+  per-record truncation, and a hard UTF-8 byte ceiling;
+- automatic semantic promotion remains disabled: truth-bearing changes still
+  require explicit memory operations or the review workflow;
+- the Bash pre-action decision uses a persistence-independent fast path, so a
+  matched block is returned before checkpoint recovery or audit telemetry;
+- stored procedural patterns use a bounded, fail-closed subset that rejects
+  backtracking hazards both at direct creation and reviewed import;
+- explicit detailed checkpoints take precedence over automatic checkpoints,
+  concurrent duplicate edit and terminal-hook delivery is exact-once,
+  interrupted checkpoint mirroring is recoverable, and old retries cannot clear
+  newer work; and
+- loop installation is project-only, preserves unrelated host configuration,
+  rolls back the exact prior connection if lifecycle setup fails, and refuses
+  modified or unowned hook removal.
+
+### Verification
+
+- the public suite now contains 123 tests, including 29 loop cases, 17 host
+  integration cases, 4 storage durability and concurrency cases, a real stdio
+  restart/resume workflow, and clean-wheel subprocess hook coverage;
+- Codex and Claude Code project configuration, permission repair, preview
+  purity, disconnect ownership, entity isolation, manual-checkpoint precedence,
+  bounded Unicode context, failure injection, and concurrent retries are
+  covered; and
+- these checks establish packaging and deterministic integration behavior, not
+  improved end-to-end LLM answer quality or live-host long-run reliability.
+
 ## 0.5.0 — 2026-07-16
 
 ### Added

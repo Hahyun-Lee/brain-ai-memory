@@ -105,20 +105,15 @@ class PackagedWorkflowEndToEndTest(unittest.TestCase):
                             "effect": "block",
                         },
                     )
-                    await call_json(
-                        session,
-                        "brain_upsert_entity",
-                        {"name": "Boreal", "entity_type": "project"},
-                    )
-                    await call_json(
-                        session,
+                    cross_write = await session.call_tool(
                         "brain_remember",
                         {
                             "kind": "semantic",
                             "entity": "Boreal",
-                            "text": "Boreal uses a cobalt rollout.",
+                            "text": "This write must be rejected.",
                         },
                     )
+                    self.assertTrue(cross_write.isError)
 
                     atlas = await call_json(
                         session,
@@ -126,12 +121,11 @@ class PackagedWorkflowEndToEndTest(unittest.TestCase):
                         {"query": "cobalt rollout"},
                     )
                     self.assertNotIn("Boreal uses a cobalt rollout", json.dumps(atlas))
-                    boreal = await call_json(
-                        session,
+                    cross_read = await session.call_tool(
                         "brain_context",
                         {"query": "cobalt rollout", "entity": "Boreal"},
                     )
-                    self.assertIn("Boreal uses a cobalt rollout", json.dumps(boreal))
+                    self.assertTrue(cross_read.isError)
 
                     verdict = await call_json(
                         session,
@@ -223,6 +217,13 @@ class PackagedWorkflowEndToEndTest(unittest.TestCase):
             self.assertEqual(receipt["status"], "applied")
             self.assertEqual(source.read_text(encoding="utf-8"), original)
 
+            runtime = brain_ai_memory.BrainAIRuntime(home)
+            boreal = runtime.store.put_entity("Boreal", entity_type="project")
+            runtime.store.put_knowledge(
+                "Boreal uses a cobalt rollout.",
+                entities=[boreal["id"]],
+            )
+
             connection = self.run_cli(
                 root,
                 home,
@@ -240,6 +241,7 @@ class PackagedWorkflowEndToEndTest(unittest.TestCase):
             config = tomllib.loads((root / ".codex" / "config.toml").read_text())
             entry = config["mcp_servers"]["brain-ai-memory"]
             self.assertEqual(entry["command"], os.path.abspath(sys.executable))
+            self.assertEqual(entry["args"][4], "--locked-entity")
             params = StdioServerParameters(
                 command=entry["command"],
                 args=entry["args"],

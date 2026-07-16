@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shlex
+import sqlite3
 import stat
 import sys
 import tempfile
@@ -28,7 +29,13 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10
     import tomli as tomllib
 
-from .storage import MemoryStore, new_id, utc_now
+from .storage import (
+    MemoryStore,
+    compile_safe_rule_pattern,
+    new_id,
+    utc_now,
+    validate_rule_reason,
+)
 from .privacy import ensure_private_directory, open_private_lock
 
 
@@ -777,9 +784,10 @@ def build_review(
         if item_id not in by_id:
             raise ValueError(f"unknown audit item: {item_id}")
         try:
-            re.compile(pattern)
-        except re.error as exc:
-            raise ValueError(f"invalid rule regular expression for {item_id}: {exc}") from exc
+            compile_safe_rule_pattern(pattern)
+            validate_rule_reason(by_id[item_id]["text"])
+        except ValueError as exc:
+            raise ValueError(f"invalid procedural rule for {item_id}: {exc}") from exc
         decisions[item_id] = {
             "action": "rule",
             "pattern": pattern,
@@ -1143,11 +1151,10 @@ def apply_review(home: Path, store: MemoryStore, review: dict, audit: dict) -> d
         or review.get("entity") != audit.get("entity")
     ):
         raise ValueError("review does not match its audit")
+    entries = {entry["id"]: entry for entry in audit["entries"]}
     approved = [value for value in review["decisions"].values() if value["action"] != "skip"]
     if not approved:
         raise ValueError("review has no approved imports")
-    entries = {entry["id"]: entry for entry in audit["entries"]}
-
     with _workflow_lock(home, review["source"]["path"]):
         with store.connect() as conn:
             existing_batch = conn.execute(
@@ -1198,6 +1205,28 @@ def apply_review(home: Path, store: MemoryStore, review: dict, audit: dict) -> d
                         _save_json(receipt_path, {**recovered, "status": "applied"})
                     return recovered
                 raise WorkflowConflict(f"review batch is {batch['status']}; create a new audit")
+
+            # Revalidate an unapplied serialized review independently of
+            # build_review and before any mutation.  Already-applied immutable
+            # reviews return their receipt above, even if a newer release has
+            # tightened rule admission since the original application.
+            for item_id, decision in review["decisions"].items():
+                if decision.get("action") != "rule":
+                    continue
+                entry = entries.get(item_id)
+                pattern = decision.get("pattern")
+                effect = decision.get("effect")
+                if not entry or not pattern or effect not in {"warn", "block"}:
+                    raise ValueError(
+                        f"rule import requires an explicit item, pattern, and effect: {item_id}"
+                    )
+                try:
+                    compile_safe_rule_pattern(pattern)
+                    validate_rule_reason(entry["text"])
+                except ValueError as exc:
+                    raise ValueError(
+                        f"invalid procedural rule for {item_id}: {exc}"
+                    ) from exc
 
             validate_audit(audit)
             source, raw, _ = _read_markdown(review["source"]["path"])
@@ -1471,14 +1500,6 @@ def apply_review(home: Path, store: MemoryStore, review: dict, audit: dict) -> d
                     elif action == "rule":
                         pattern = decision.get("pattern")
                         effect = decision.get("effect")
-                        if not pattern or effect not in {"warn", "block"}:
-                            raise ValueError(f"rule import requires an explicit pattern and effect: {item_id}")
-                        try:
-                            re.compile(pattern)
-                        except re.error as exc:
-                            raise ValueError(
-                                f"invalid rule regular expression for {item_id}: {exc}"
-                            ) from exc
                         target_id = new_id("rule")
                         conn.execute(
                             """INSERT INTO rules
@@ -1772,19 +1793,40 @@ def _managed_mcp_args(value) -> dict | None:
         return None
     if value[:2] != ["-m", "brain_ai_memory.mcp_server"]:
         return None
-    if value[2] != "--home" or value[4] != "--entity":
+    if value[2] != "--home" or value[4] not in {"--entity", "--locked-entity"}:
         return None
     if not all(isinstance(item, str) for item in value):
         return None
     if not value[3] or not value[5]:
         return None
-    return {"home": value[3], "entity": value[5]}
+    return {
+        "home": value[3],
+        "entity": value[5],
+        "entity_locked": value[4] == "--locked-entity",
+    }
 
 
 def _managed_python_command(value) -> bool:
     if not isinstance(value, str) or not Path(value).is_absolute():
         return False
     return re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(value).name.lower()) is not None
+
+
+def entity_references_match(home: Path, left: str, right: str) -> bool:
+    """Compare two entity references by stable identity when possible."""
+    left_value = left.strip()
+    right_value = right.strip()
+    if not left_value or not right_value:
+        return left_value == right_value
+    if left_value.casefold() == right_value.casefold():
+        return True
+    store = MemoryStore(Path(home).expanduser().resolve())
+    if not store.db_path.is_file():
+        return False
+    try:
+        return store.get_entity(left_value)["id"] == store.get_entity(right_value)["id"]
+    except (KeyError, ValueError, OSError, sqlite3.Error):
+        return False
 
 
 def _managed_json_server(value) -> bool:
@@ -2147,6 +2189,7 @@ def connection_change(
     project_root: str | Path = ".",
     disconnect: bool = False,
     apply: bool = False,
+    _transaction_details: bool = False,
 ) -> dict:
     if host not in {"codex", "claude-code"}:
         raise ValueError("host must be codex or claude-code")
@@ -2155,22 +2198,44 @@ def connection_change(
     if not disconnect and not entity.strip():
         raise ValueError("--entity is required for a project-scoped default")
     root = Path(project_root).expanduser().resolve()
+    if scope == "project" and not root.is_dir():
+        raise ValueError(f"project root does not exist or is not a directory: {root}")
     # Keep the interpreter path used to launch the CLI.  ``Path.resolve()``
     # dereferences a virtualenv's ``python`` symlink and can silently point the
     # host at the base interpreter where brain-ai-memory is not installed.
     command = os.path.abspath(sys.executable)
-    arguments = [
-        "-m",
-        "brain_ai_memory.mcp_server",
-        "--home",
-        str(home),
-        "--entity",
-        entity.strip(),
-    ]
+    entity_flag = "--locked-entity" if scope == "project" else "--entity"
+    requested_entity = entity.strip()
+
+    def managed_arguments(before_entry: dict | None) -> list[str]:
+        effective_entity = requested_entity
+        if isinstance(before_entry, dict):
+            configured = _managed_mcp_args(before_entry.get("args"))
+            if (
+                configured
+                and configured["home"] == str(home)
+                and entity_references_match(
+                    home, configured["entity"], requested_entity
+                )
+            ):
+                effective_entity = configured["entity"]
+        return [
+            "-m",
+            "brain_ai_memory.mcp_server",
+            "--home",
+            str(home),
+            entity_flag,
+            effective_entity,
+        ]
+
     if host == "claude-code":
         path = root / ".mcp.json" if scope == "project" else Path.home() / ".claude.json"
         config_root = root if scope == "project" else Path.home().resolve()
-        before, _ = _read_pinned_config(path, config_root)
+        before, before_mode = _read_pinned_config(path, config_root)
+        before_entry = _server_entry(_load_json_config(before, path))
+        arguments = managed_arguments(
+            before_entry if _managed_json_server(before_entry) else None
+        )
         server = {"command": command, "args": arguments, "env": MANAGED_ENV}
         before, after = _json_config_change(
             path,
@@ -2178,12 +2243,13 @@ def connection_change(
             disconnect=disconnect,
             before=before,
         )
-        before_entry = _server_entry(_load_json_config(before, path))
         after_entry = _server_entry(_load_json_config(after, path))
     else:
         path = root / ".codex" / "config.toml" if scope == "project" else Path.home() / ".codex" / "config.toml"
         config_root = root if scope == "project" else Path.home().resolve()
-        before, _ = _read_pinned_config(path, config_root)
+        before, before_mode = _read_pinned_config(path, config_root)
+        before_entry = _managed_toml_entry(before, path)
+        arguments = managed_arguments(before_entry)
         before, after = _toml_config_change(
             path,
             command,
@@ -2191,7 +2257,6 @@ def connection_change(
             disconnect=disconnect,
             before=before,
         )
-        before_entry = _codex_entry(_load_toml_config(before, path))
         after_entry = _codex_entry(_load_toml_config(after, path))
     if disconnect and isinstance(before_entry, dict):
         configured = _managed_mcp_args(before_entry.get("args"))
@@ -2199,7 +2264,9 @@ def connection_change(
             raise ValueError(
                 "managed connection belongs to a different Brain-AI home"
             )
-        if entity.strip() and configured["entity"] != entity.strip():
+        if entity.strip() and not entity_references_match(
+            home, configured["entity"], entity
+        ):
             raise ValueError("managed connection belongs to a different entity")
     changed = before != after
     diff = CONTROL_RE.sub("", _managed_config_diff(path, before_entry, after_entry))
@@ -2262,7 +2329,7 @@ def connection_change(
             parts.extend(["--project-root", shlex.quote(str(root))])
         parts.append("--apply")
         next_command = " ".join(parts)
-    return {
+    result = {
         "host": host,
         "scope": scope,
         "entity": None if disconnect else entity.strip(),
@@ -2275,6 +2342,18 @@ def connection_change(
         "diff": diff,
         "next": next_command,
     }
+    if _transaction_details:
+        result["_transaction"] = {
+            "before": before,
+            "before_mode": before_mode,
+            "after": after,
+            "after_mode": (
+                (before_mode or 0o644)
+                if before_mode is not None or changed
+                else None
+            ),
+        }
+    return result
 
 
 def connection_status(
@@ -2288,6 +2367,8 @@ def connection_status(
     if scope not in {"project", "user"}:
         raise ValueError("scope must be project or user")
     root = Path(project_root).resolve()
+    if scope == "project" and not root.is_dir():
+        raise ValueError(f"project root does not exist or is not a directory: {root}")
     if host == "claude-code":
         path = root / ".mcp.json" if scope == "project" else Path.home() / ".claude.json"
         config_root = root if scope == "project" else Path.home().resolve()
@@ -2320,10 +2401,41 @@ def connection_status(
     )
     home_matches = bool(details and details["home"] == str(home))
     entity_matches = bool(
-        details and (entity is None or details["entity"] == entity)
+        details
+        and (
+            entity is None
+            or entity_references_match(home, details["entity"], entity)
+        )
     )
+    binding_mode_matches = bool(
+        details
+        and (
+            details["entity_locked"]
+            if scope == "project"
+            else not details["entity_locked"]
+        )
+    )
+    migration_required = bool(
+        scope == "project"
+        and managed
+        and details
+        and not details["entity_locked"]
+        and home_matches
+        and entity_matches
+    )
+    migration_command = None
+    if migration_required:
+        migration_command = (
+            f"brain-ai --home {shlex.quote(str(home))} connect {host} "
+            f"--entity {shlex.quote(details['entity'])} --scope project "
+            f"--project-root {shlex.quote(str(root))} --apply"
+        )
     configured = bool(
-        managed and interpreter_matches and home_matches and entity_matches
+        managed
+        and interpreter_matches
+        and home_matches
+        and entity_matches
+        and binding_mode_matches
     )
     return {
         "host": host,
@@ -2333,6 +2445,9 @@ def connection_status(
         "home": str(home),
         "configured_home": details["home"] if details else None,
         "configured_entity": details["entity"] if details else None,
+        "entity_locked": bool(details and details["entity_locked"]),
+        "migration_required": migration_required,
+        "migration_command": migration_command,
         "interpreter_matches": interpreter_matches,
         "managed_entry": managed,
         "error": error,

@@ -1,40 +1,40 @@
 **English** | [한국어](README.ko.md)
 
-# Brain-AI Memory — Project Memory That Survives the Next Session
+# Brain-AI Memory — Stop Re-explaining Your Project
 
-**Keep current facts, exact state, decisions, and next actions available across
-agent sessions—without mixing projects or overwriting your `MEMORY.md`.**
+**Open a new Codex or Claude Code session and continue from the last one.**
 
-Brain-AI Memory is a local MCP memory layer for Codex, Claude Code, and other
-MCP hosts. It reviews an existing Markdown memory file, stores only the records
-you approve, writes a project-scoped MCP configuration, and leaves a handoff the
-next session can resume. Replaced facts keep their source history instead of
-quietly disappearing.
+Brain-AI Memory keeps the facts, decisions, exact values, and next steps you
+choose on your computer, organized by project so memories do not spill into
+other work. Turn on session automation and the next session receives the
+relevant memory and a handoff from the last one. When a fact changes, its
+previous version and source remain traceable. Existing `MEMORY.md` files stay
+untouched.
 
-**Local-first · No API key · No hosted service · No external database server ·
-Codex / Claude Code / MCP · Python 3.10+ · MIT**
+**Runs locally · No API key · No account · No database setup**
 
 [![CI](https://github.com/Hahyun-Lee/brain-ai-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/Hahyun-Lee/brain-ai-memory/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Hahyun-Lee/brain-ai-memory)](https://github.com/Hahyun-Lee/brain-ai-memory/releases/latest)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**[Try the local tour](#see-it-in-60-seconds)** ·
-**[Adopt a MEMORY.md](#adopt-an-existing-memorymd)** ·
+**[Try it in 60 seconds](#see-it-in-60-seconds)** ·
+**[Use an existing MEMORY.md](#adopt-an-existing-memorymd)** ·
 **[Connect Codex or Claude Code](#connect-codex-or-claude-code)** ·
-**[See the evidence](#evidence-status)**
+**[See the test results](#evidence-status)**
 
 <p align="center">
-  <img src="docs/assets/graphical-abstract.png" width="920" alt="Session records organized by project and memory type, then passed to the next session; a separate lower row shows an optional action check.">
+  <img src="docs/assets/graphical-abstract.png" width="920" alt="Messy past sessions are organized into the right project memory so the next AI session can continue; an optional safety check appears below.">
 </p>
 
 <p align="center">
-  Session records → current, project-scoped memory → a handoff for the next session.<br>
-  The lower row is the optional action check.
+  Past sessions → the right project memory → continue in the next session.<br>
+  Optional: stop a command when it conflicts with an approved rule.
 </p>
 
-> Retrieval finds relevant text. Cross-session memory also needs project scope,
-> current-version selection, exact state, source history, and a handoff.
+> Search can find a similar old note. Brain-AI Memory also tracks which project
+> it belongs to, whether a newer fact replaced it, and what the next session
+> should do.
 
 ## See it in 60 seconds
 
@@ -46,7 +46,7 @@ git clone https://github.com/Hahyun-Lee/brain-ai-memory.git
 cd brain-ai-memory
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install ".[mcp]"
+python -m pip install .
 ```
 
 ```bash
@@ -69,10 +69,11 @@ Optional action checks
 The tour proves the local package runs; it does not import your files or show
 autonomous agent behavior.
 
-**Public software proof:** 64 tests, Python 3.10–3.12 compatibility, a clean-wheel
-workflow from audit through a real MCP restart and resume, and 20/20 component
-contracts. This is integration evidence, not a claim about Codex or Claude Code
-tool selection or better LLM answers.
+**What is tested:** the complete 123-test suite runs on Python 3.12; the
+core runtime and adoption workflow also run on Python 3.10 and 3.11. Clean-wheel
+checks cover a real process restart/resume, subprocess host-hook setup,
+automatic checkpoint/resume, and 20/20 component contracts. This is integration
+evidence, not a claim about better LLM answers.
 
 ## Is it for you?
 
@@ -91,20 +92,20 @@ ordinary document search, or a `MEMORY.md` that is easy to prune by hand.
 
 Default recall uses transparent local multilingual BM25 over SQLite; no
 embedding model is downloaded. Vault and Smart Connections backends are
-optional. The host must call the tools: Brain-AI Memory does not silently read
-conversations or inject context on its own.
+optional. Tools-only mode waits for the host to call it. Opt-in automatic mode
+uses each prompt only to select same-project records, supplies bounded context,
+and checkpoints observed changes without saving the raw conversation.
 
 ## Adopt an existing MEMORY.md
 
-If you did not run the tour above, install the package with MCP support from a
-checkout:
+If you did not run the tour above, install the base package from a checkout:
 
 ```bash
 git clone https://github.com/Hahyun-Lee/brain-ai-memory.git
 cd brain-ai-memory
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install ".[mcp]"
+python -m pip install .
 ```
 
 From the project that owns the memory file, pin one project root and local
@@ -171,7 +172,7 @@ not judgments about which statement is true or current.
 |---|---|
 | ordinary fact or event | `--approve-ready`, or explicit `--set ITEM=semantic\|episodic` |
 | exact state | explicit `--set ITEM=state` on a literal `key: value` entry |
-| procedural rule | explicit `--rule ITEM=REGEX` and `--rule-effect warn\|block` |
+| procedural rule | explicit `--rule ITEM=SAFE_PATTERN` and `--rule-effect warn\|block` |
 | replacement fact | explicit `--supersede ITEM=MEMORY_ID` |
 | leave out | explicit `--set ITEM=skip`, or automatic skip for an exact duplicate candidate |
 
@@ -194,54 +195,72 @@ attempts in the ledger.
 
 ## Connect Codex or Claude Code
 
-Connection is preview-first. The default scope is the current project, and the
-chosen entity is written into the MCP server arguments as that project's
-default memory scope. The entity must already exist in the same
-`BRAIN_AI_HOME`: a successful adoption `apply` creates it. If you skipped
-adoption, create it once with
-`brain-ai entity add --name my-project --type project`.
+Use automatic mode when you want a new session to recall the same project and a
+turn with relevant changes to leave a checkpoint without relying on the agent
+to remember every call. Changes are previewed before anything is written.
 
 ```bash
-# Codex: preview, then write .codex/config.toml
-brain-ai connect codex --entity my-project --project-root "$PROJECT_ROOT"
-brain-ai connect codex --entity my-project --project-root "$PROJECT_ROOT" --apply
-brain-ai doctor --host codex --entity my-project --project-root "$PROJECT_ROOT"
+# Install the automatic-session extra from the downloaded repository
+cd /path/to/brain-ai-memory
+python -m pip install ".[mcp]"
 
-# Claude Code: preview, then write .mcp.json
-brain-ai connect claude-code --entity my-project --project-root "$PROJECT_ROOT"
-brain-ai connect claude-code --entity my-project --project-root "$PROJECT_ROOT" --apply
-brain-ai doctor --host claude-code --entity my-project --project-root "$PROJECT_ROOT"
+# Then run once from the project that owns this memory
+cd /path/to/your/project
+export PROJECT_ROOT="$PWD"
+export BRAIN_AI_HOME="$PROJECT_ROOT/.brain-ai"
+brain-ai init
+brain-ai entity add --name my-project --type project  # skip if it already exists
+
+# Codex: preview, apply, then open a new Codex session in this project
+brain-ai connect codex --entity my-project --mode loop --project-root "$PROJECT_ROOT"
+brain-ai connect codex --entity my-project --mode loop --project-root "$PROJECT_ROOT" --apply
+brain-ai doctor --host codex --entity my-project --mode loop --project-root "$PROJECT_ROOT"
 ```
 
-If you jumped directly to this section, first run `cd /path/to/your/project`,
-`export PROJECT_ROOT="$PWD"`, and
-`export BRAIN_AI_HOME="$PROJECT_ROOT/.brain-ai"` so entity creation, connection,
-and the MCP server all use the same store.
+For Claude Code, replace `codex` with `claude-code`. If you imported a
+`MEMORY.md`, that import already created the project entity. Codex asks you to
+trust the exact project hooks; review them with `/hooks`, then start a fresh
+session. `doctor` reports `configured` after installation and `active` only
+after one real start → prompt → stop cycle has been observed.
 
-Use `--scope user` only when one store and entity should intentionally be the
-default outside this project. `brain-ai disconnect ...` also previews its diff
-and requires `--apply` before changing the host configuration.
+Automatic mode is deliberately project-only. At session start it supplies the
+latest handoff and a hard byte-bounded set of current records. Each prompt is
+used transiently to select relevant records from that same project. It does not
+store raw prompts, raw tool output, assistant messages, or edited file contents,
+and it never promotes a sentence to a fact, rule, or exact state on its own.
+See [Automatic session memory](docs/08-autonomous-loop.md) for the event flow,
+privacy boundary, host differences, and removal commands.
+
+If you only want on-demand memory tools, omit `--mode loop`:
+
+```bash
+brain-ai connect codex --entity my-project --project-root "$PROJECT_ROOT"
+brain-ai connect codex --entity my-project --project-root "$PROJECT_ROOT" --apply
+```
+
+In tools-only mode, Codex or Claude Code chooses when to recall, save, and
+checkpoint. `--scope user` is available only for that deliberate tools-only
+setup. `brain-ai disconnect ...` also previews its diff and requires `--apply`
+before changing host configuration.
 
 Previews show only a sanitized view of the managed `brain-ai-memory` entry;
 unexpected environment data is redacted and unrelated host configuration is not
 printed. Disconnect removes only an entry owned by this command from the same
 scope/project config and Brain-AI home. A supplied `--entity` must also match.
-Manually written MCP entries are not owned by these commands and must be edited
-or removed manually.
+Manually written connection entries are not owned by these commands and must be
+edited or removed manually.
 
 The generated project entry pins the current Python interpreter and Brain-AI
 home by absolute path so it still starts outside the activated shell. Treat it
 as machine-local configuration; review those paths before committing or sharing
 the host config.
 
-When the host loads or approves the generated entry, the MCP server exposes
-`brain_context`, `brain_remember`, `brain_checkpoint`, and `brain_resume` with
-the project entity as their default. MCP tool availability is not automatic
-transcript ingestion or guaranteed tool use: the host still chooses what to
-recall, place in context, and save.
+The generated connection locks every memory call to the chosen project. An
+explicit attempt to read or write another project is rejected rather than
+silently changing scope.
 
-Add an equivalent instruction to the project's `AGENTS.md` or `CLAUDE.md` when
-you want the host to follow a repeatable memory loop:
+In tools-only mode, add an equivalent instruction to the project's `AGENTS.md`
+or `CLAUDE.md` when you want the host to follow a repeatable memory routine:
 
 ```text
 For cross-session work, call brain_resume first and brain_context before using
@@ -291,22 +310,24 @@ for more detail.
 
 ## What the system manages
 
-| Memory-management responsibility | What v0.5.0 does |
+| Memory-management responsibility | What the current source does |
 |---|---|
 | existing Markdown memory | audits, reviews, and imports approved entries with line-level provenance while leaving the source file unchanged |
-| selected evidence | records only events the host sends; provider transcripts stay with the host |
-| working-context candidate | reconstructs an entity-scoped, record-count-limited bundle for the host to place within its own token budget |
+| selected evidence | stores explicit memory writes; automatic mode may also store bounded relative edit-target metadata, never file contents or the raw transcript |
+| working context | reconstructs an entity-scoped bundle; automatic mode adds a hard 6,000-byte ceiling and source identifiers before supplying it to the host |
 | episodic memory | preserves ingest-timestamped events, entity bindings, and retained import evidence |
 | semantic memory | stores sourced reusable knowledge and versions facts only through explicit supersession |
 | procedural memory | stores rules and only promotes episode candidates after preview and approval |
 | exact state | keeps knowable values in a typed store rather than asking the model to estimate them |
-| lifecycle and handoff | records consolidation, reconsolidation, logical active/inactive decisions, rollback evidence, and entity-scoped handoff/resume |
-| host connection | previews and writes a managed project MCP entry for Codex or Claude Code with a default entity scope |
+| lifecycle and handoff | records consolidation, reconsolidation, logical active/inactive decisions, rollback evidence, handoff/resume, and dirty-only idempotent automatic checkpoints |
+| host connection | previews and writes a project-locked connection; opt-in hooks automate recall, action checks, acknowledgement, and checkpoint timing |
 
 Entity links, source labels, and the component schema apply across all stores.
-The runtime does not collect provider sessions or put memory into a model on its
-own. File compaction, splitting, and physical deletion stay with the host. Its
-`limit` bounds records, not tokens.
+Tools-only mode does not collect provider sessions or place memory into model
+context on its own. Automatic mode uses prompts transiently for retrieval but
+does not persist raw prompts, raw tool output, assistant messages, or edited
+file contents. File compaction, splitting, and physical deletion stay with the
+host. CLI `limit` bounds records; the automatic context path is byte-bounded.
 
 ## Write and query memory directly
 
@@ -331,12 +352,14 @@ The component ontology is validated when the runtime starts. Inspect it with
 
 ### Add an action check (optional)
 
-The MCP server also exposes `brain_check_action`; it never runs arbitrary shell
-commands. The host still executes allowed actions and must treat
-`gate.allowed = false` as a stop. For deterministic blocking, route execution
-through `brain-ai harness` or wire the result into a host pre-action hook. Pass
-`--entity` when entity-bound rules should apply. See the [Codex and Claude Code
-setup](docs/07-mcp-server.md).
+Tools-only mode exposes `brain_check_action`; it never runs arbitrary shell
+commands, so the host must treat `gate.allowed = false` as a stop. Automatic
+mode wires project-scoped block rules to the supported Bash pre-action hook and
+returns a host denial when one matches. This is a narrow command boundary, not
+a claim that every possible tool or side effect is intercepted. For a fully
+explicit execution path, use `brain-ai harness`. See [Automatic session
+memory](docs/08-autonomous-loop.md) and the [manual connection
+guide](docs/07-mcp-server.md).
 
 ## Why the brain-inspired separation?
 
@@ -345,8 +368,10 @@ episodes, facts, rules, exact state, and action checks so that each failure can
 be debugged on its own. You can use the contracts without the brain labels.
 See the [mapping and its limits](docs/01-the-mapping.md).
 
-The current suite covers 36 adoption-workflow integration cases, 22 runtime
-cases, 5 ablation cases, and 1 packaged MCP restart/resume case (64 total).
+The current suite covers 40 adoption-workflow cases, 27 runtime cases, 5
+ablation cases, 1 packaged restart/resume case, 17 host-integration cases, 29
+automatic-loop cases, and 4 storage durability and concurrency cases (123
+total).
 These tests do not yet show better end-to-end LLM answers than RAG or a simpler
 memory system. See the [evidence and limitations](#evidence-status).
 
@@ -470,6 +495,7 @@ checks only if you need them:
 | explicitly resolve imported state, rules, or replacements | `review --set`, `--rule`, or `--supersede` | no structured state, executable rule, or old version changes without a recorded choice |
 | connect Obsidian / Smart Connections | [semantic adapters](docs/06-adapters-and-observer.md) | v1 and v2 responses work; unbound vault hits are excluded from entity-scoped recall until imported or linked locally |
 | inspect local state and handoffs | [clean-room observer](docs/06-adapters-and-observer.md#read-only-reference-observer) | store counts, recent audit events, and the latest checkpoint render on localhost |
+| continue automatically across Codex or Claude Code sessions | `brain-ai connect codex\|claude-code --entity ... --mode loop` | `doctor` becomes active after a real start → prompt → stop cycle, and the next start resumes the same scoped checkpoint |
 | connect scoped memory to Codex or Claude Code | `brain-ai connect codex\|claude-code --entity ...` | the project config points to the same store and supplies the intended default entity |
 | connect another MCP host | [manual MCP guide](docs/07-mcp-server.md) | the host calls `brain_context`, injects selected records, writes outcomes, and resumes the scoped handoff |
 | enforce a stored procedure at action time | `brain-ai harness --entity ...` or a [behavioral guard](templates/hooks/behavioral-guard.py) | an entity-scoped unsafe pattern is blocked at the real execution boundary |
@@ -513,31 +539,29 @@ The mapping's TH inspiration is broader input gating. The clean-room runtime
 implements the narrower, observable form it actually tests: a proposed-action
 check. It does not claim to filter a model's entire prompt or provider input.
 
-### The host closes the loop
+### What runs automatically—and what stays reviewed
 
-Brain-AI Memory supplies the adoption and memory operations. The host runs the
-full loop:
+Tools-only mode leaves recall, saving, and handoff timing to the host. Opt-in
+automatic mode closes the deterministic session edges: bounded project recall
+at start and prompt time, a supported Bash action check, bounded edit-target
+metadata after successful edits, dirty-only checkpoints, resume, and delivery
+acknowledgement.
 
-1. Audit and review an existing `MEMORY.md`, or keep any native transcript with
-   the host and choose only the records worth carrying forward.
-2. Apply the approved import or call `brain_remember`/`brain-ai remember` with the memory type, entity,
-   source label, and exact value where applicable.
-3. Call `brain_context`/`brain-ai run`, then fit the returned records into the
-   host's token budget and model context.
-4. Run the host's policy, using the entity-scoped gate or `harness`/`sequence`
-   bridge if needed.
-5. Save the selected outcome as an episode or exact state.
-6. Review promotion, replace stale knowledge, and record any archive, split,
-   compact, migration, or logical-delete decision.
-7. Write an entity-scoped handoff for the next session and resume that same
-   scope when work continues.
+Judgment-bearing memory changes remain explicit:
 
-Today the package provides the Markdown audit/review/apply workflow, managed
-project MCP configuration for Codex and Claude Code, these calls, and the audit
-trail. It does not automatically ingest provider transcripts. Scheduling, token
-budgeting, file retention, and handoff acknowledgement still belong to the
-host. See the [memory lifecycle](docs/02-memory-lifecycle.md) for the record and
-handoff format.
+1. You review an existing `MEMORY.md` before importing it.
+2. A fact, rule, exact state value, or replacement version is written only by
+   an explicit memory operation.
+3. The host still decides and executes the work; the loop does not infer an
+   outcome from raw tool output or assistant prose.
+4. Promotion, supersession, archive, split, compact, migration, and logical
+   deletion remain reviewable lifecycle decisions.
+5. Provider transcripts, physical file retention, encryption, backup, and
+   verified deletion stay with the host or operator.
+
+See [Automatic session memory](docs/08-autonomous-loop.md) for the installed
+loop and [memory lifecycle](docs/02-memory-lifecycle.md) for the record and
+handoff contract.
 
 ![Memory lifecycle: recall, in-session tagging, consolidation, and seven lifecycle operations](docs/assets/memory-lifecycle.svg)
 
@@ -561,6 +585,7 @@ public package.
 | Does a compact pointer index fit more entries than full append-only entries? | **Yes. Deterministic capacity simulation** |
 | Does a simple compact pointer preserve retrieval quality on public data? | **No. Current keyword pointers trade recall for size** |
 | Does the packaged workflow survive an MCP process restart? | **Yes. CI runs clean-wheel audit → review → apply → generated config → real stdio MCP calls → checkpoint → fresh process → resume. This is integration evidence, not host behavior or answer quality.** |
+| Does the installed automatic loop recall, checkpoint, and resume? | **Yes in clean-wheel subprocess fixtures: Codex and Claude Code configuration is verified, and a Codex start → prompt → edit → stop → fresh-start sequence resumes the same scoped handoff. A live-host field study is still missing.** |
 | Does the lifecycle improve answer accuracy for a real LLM agent? | **Not yet measured** |
 | Does the full architecture beat RAG, long context, or another memory system? | **Not yet measured** |
 | Are latency, token cost, conflict resolution, and abstention improved? | **Not yet measured** |
@@ -693,26 +718,26 @@ manifest.
 
 ## Roadmap
 
-The current package is a local adoption workflow and memory kernel. It can
-audit and import an existing `MEMORY.md`, configure project-scoped MCP for Codex
-or Claude Code, and write and resume scoped handoffs. It still does not manage
-the full loop autonomously. Planned work is:
+The current source is a local adoption workflow and typed memory kernel with an
+opt-in, project-scoped session loop for Codex and Claude Code. The loop
+automates recall and checkpoint timing; it is not a background service and does
+not infer truth from a transcript. Planned work is:
 
-1. add a provider-neutral ingestion envelope with session/message identity,
-   event time, outcome, evidence URI/hash, and deduplication;
-2. ship one opt-in transcript adapter without making private provider logs part
-   of the core;
-3. assemble candidate memory under a real token/byte budget and expose why each
-   record was selected;
-4. add explicit handoff consume/acknowledge state plus lifecycle backlog and
-   health metrics; and
-5. provide compact, split, archive, and verified-delete adapters, then
-   test the complete host loop end to end.
+1. add long-run latency, contention, retry, and real-host compatibility tests
+   in addition to the current deterministic and subprocess fixtures;
+2. expose a first-party review queue and clearer selection/omission reasons for
+   lifecycle candidates;
+3. add token-aware budgeting alongside the current hard byte bound and measure
+   retrieval plus reader accuracy under equal budgets;
+4. expand host adapters only where project identity, event semantics, and
+   ownership can stay explicit; and
+5. provide compact, split, archive, and verified-delete adapters with a tested
+   retention workflow.
 
-Production multi-writer locking, authentication, domain-ontology reasoning,
-and entity merge/versioning remain later hardening work. The current scope is
-an **installable, review-first local memory workflow and kernel**. It is not yet
-a fully autonomous memory platform.
+Authentication for shared deployments, domain-ontology reasoning, and entity
+merge/versioning remain later hardening work. The current scope is an
+**installable, review-first local memory system with a supervised automatic
+session loop**, not an automatic truth engine or a multi-user memory service.
 
 ## Related work
 
@@ -745,6 +770,7 @@ those systems.
 | [docs/05-runtime.md](docs/05-runtime.md) | installable memory kernel, stores, routing, lifecycle, and optional action bridge |
 | [docs/06-adapters-and-observer.md](docs/06-adapters-and-observer.md) | Smart Connections compatibility and clean-room Command Center |
 | [docs/07-mcp-server.md](docs/07-mcp-server.md) | provider-neutral MCP tools, resources, setup, and security boundary |
+| [docs/08-autonomous-loop.md](docs/08-autonomous-loop.md) | opt-in automatic recall, action checks, checkpoints, host setup, and privacy boundary |
 | [src/brain_ai_memory/](src/brain_ai_memory/) | public Python runtime implementation |
 | [tests/](tests/) | kernel integration, adapter, and supporting contract tests |
 | [CHANGELOG.md](CHANGELOG.md) | release-level changes and evidence boundaries |
@@ -775,7 +801,3 @@ rather than a public issue. See [SECURITY.md](SECURITY.md).
 
 If this architecture or its evaluation protocol supports your work, use the
 metadata in [CITATION.cff](CITATION.cff).
-
-## License
-
-MIT. See [LICENSE](LICENSE).

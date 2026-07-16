@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brain-ai-memory"
-version = "0.5.0"
-description = "Project-scoped, versioned memory for AI agents that work across sessions"
+version = "0.6.0"
+description = "Local project memory for Codex and Claude Code across sessions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -48,6 +48,7 @@ Issues = "https://github.com/Hahyun-Lee/brain-ai-memory/issues"
 [project.scripts]
 brain-ai = "brain_ai_memory.cli:main"
 brain-ai-mcp = "brain_ai_memory.mcp_server:main"
+brain-ai-hook = "brain_ai_memory.hook_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

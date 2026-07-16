@@ -45,6 +45,9 @@ jobs:
             tests/test_runtime.py \
             tests/test_workspace.py \
             tests/test_e2e.py \
+            tests/test_integrations.py \
+            tests/test_loop.py \
+            tests/test_storage_concurrency.py \
             tests/test_component_ablation.py \
             benchmarks/run_component_ablation.py \
             benchmarks/plot_component_ablation.py \
@@ -184,6 +187,8 @@ jobs:
             --no-save
           /tmp/brain-ai-wheel/bin/python \
             -W error::ResourceWarning "$GITHUB_WORKSPACE/tests/test_e2e.py" -v
+          /tmp/brain-ai-wheel/bin/python \
+            -W error::ResourceWarning "$GITHUB_WORKSPACE/tests/test_integrations.py" -v
       - name: Test the self-contained source distribution
         run: |
           sdist="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.tar.gz' -print -quit)"
