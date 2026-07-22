@@ -8,7 +8,9 @@
   `ValueError` contract; and
 - preserve successful post-tool artifact captures when source refresh fails,
   keep the cached freshness controls active, and report the bounded diagnostic
-  without marking the loop event unhealthy.
+  without marking the loop event unhealthy; and
+- route explicit exact-state requests to `IPS` and make the packaged restart
+  test verify the exact state key and value instead of matching echoed text.
 
 ### Verification
 

@@ -52,6 +52,11 @@ class RuntimeTest(unittest.TestCase):
         self.assertTrue(result["memory"]["ATL"])
         self.assertEqual(result["memory"]["IPS"][0]["value"], 3)
 
+        exact_state = self.runtime.process("open_reviews exact state")
+        self.assertIn("IPS", exact_state["route"])
+        self.assertEqual(exact_state["memory"]["IPS"][0]["key"], "open_reviews")
+        self.assertEqual(exact_state["memory"]["IPS"][0]["value"], 3)
+
     def test_rule_patterns_reject_backtracking_hazards_at_creation(self):
         pathological = r"(a+)+$"
         self.assertIsNotNone(re.compile(pathological))

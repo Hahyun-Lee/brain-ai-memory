@@ -169,8 +169,12 @@ class PackagedWorkflowEndToEndTest(unittest.TestCase):
                         "brain_context",
                         {"query": "open_reviews exact state"},
                     )
-                    self.assertIn("open_reviews", json.dumps(state))
-                    self.assertIn("3", json.dumps(state))
+                    self.assertIn("IPS", state["route"])
+                    self.assertEqual(
+                        state["memory"]["IPS"][0]["key"],
+                        "open_reviews",
+                    )
+                    self.assertEqual(state["memory"]["IPS"][0]["value"], 3)
 
                     verdict = await call_json(
                         session,

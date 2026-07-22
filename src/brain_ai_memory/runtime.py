@@ -31,6 +31,7 @@ BUILTIN_RULES = [
 ]
 
 NUMERIC_HINTS = re.compile(r"\b(count|number|total|metric|how many)\b|개수|몇\s*개|수치|총합", re.I)
+EXACT_STATE_HINTS = re.compile(r"\b(?:exact\s+)?state\b|상태(?:값)?|状态", re.I)
 TEMPORAL_HINTS = re.compile(r"\b(when|before|after|recent|last|timeline|session)\b|언제|이전|이후|최근|세션", re.I)
 PROCEDURAL_HINTS = re.compile(r"\b(rule|must|never|always|procedure|workflow|fallback|how do)\b|규칙|절차|항상|금지|실행", re.I)
 MAX_RULE_VERDICT_BYTES = 2_048
@@ -61,7 +62,7 @@ class BrainAIRuntime:
         components: list[str] = ["PFC"]
         if proposed_action:
             components.extend(["TH", "BG"])
-        if NUMERIC_HINTS.search(query):
+        if NUMERIC_HINTS.search(query) or EXACT_STATE_HINTS.search(query):
             components.append("IPS")
         if TEMPORAL_HINTS.search(query):
             components.append("HC")
