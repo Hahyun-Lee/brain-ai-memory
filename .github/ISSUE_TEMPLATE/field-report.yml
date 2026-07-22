@@ -1,0 +1,48 @@
+name: Field report
+description: Tell us what worked, failed, or blocked you in a real project.
+title: "[Field report] "
+body:
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      options:
+        - Codex
+        - Claude Code
+        - CLI only
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Outcome
+      options:
+        - Working
+        - Partly working
+        - Blocked before use
+        - Incorrect or stale memory
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: What were you trying to carry across sessions?
+      placeholder: Project type, number of sessions, and the fact, state, rule, or handoff involved.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What happened?
+      description: Include the command, `brain-ai --version`, and relevant `brain-ai doctor --json` output when available.
+      placeholder: Expected result, actual result, and the smallest steps that reproduce it.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed secrets, personal data, private memory content, and sensitive local paths.
+          required: true

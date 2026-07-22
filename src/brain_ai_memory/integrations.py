@@ -516,6 +516,9 @@ def lifecycle_connection_status(
     active = False
     active_last_seen = None
     loop_error = None
+    source_freshness: list[dict] = []
+    source_attention_count = 0
+    stale_source_record_count = 0
     try:
         hook_text, _ = _read_pinned_config(hook_path, root)
         binding_text, binding_mode = _read_pinned_config(binding_path, home)
@@ -548,6 +551,13 @@ def lifecycle_connection_status(
             observed_events = loop_status["observed_events"]
             active = bool(loop_status["active"])
             active_last_seen = loop_status["active_last_seen"]
+            source_freshness = loop_status.get("source_freshness", [])
+            source_attention_count = int(
+                loop_status.get("source_attention_count", 0)
+            )
+            stale_source_record_count = int(
+                loop_status.get("stale_source_record_count", 0)
+            )
             if not active and loop_status.get("event_issues"):
                 issue = loop_status["event_issues"][0]
                 loop_error = (
@@ -574,6 +584,9 @@ def lifecycle_connection_status(
         "active": configured and active,
         "active_last_seen": active_last_seen,
         "loop_error": loop_error,
+        "source_freshness": source_freshness,
+        "source_attention_count": source_attention_count,
+        "stale_source_record_count": stale_source_record_count,
         "host_trust": "observed" if observed_events else ("required" if host == "codex" else "unknown"),
         "session_end_support": (
             "observed"

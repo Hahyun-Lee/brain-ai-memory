@@ -18,6 +18,14 @@ dist/
 *.egg-info/
 .brain-ai/
 
+# Local credentials and signing material
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+
 # Local scratch
 *.local
 scratch/

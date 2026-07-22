@@ -16,6 +16,7 @@ from .context import (
 )
 from .runtime import BrainAIRuntime
 from .storage import utc_now
+from .workspace import inspect_source_freshness
 
 
 SUPPORTED_HOSTS = {"codex", "claude-code"}
@@ -715,6 +716,65 @@ class LoopLedger:
             )
         return int(cursor.rowcount)
 
+    def replace_source_freshness(self, report: dict) -> None:
+        """Publish one complete source-freshness snapshot atomically."""
+        entity_id = str(report["entity_id"])
+        with self.store.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                "DELETE FROM loop_source_freshness WHERE entity_id=?",
+                (entity_id,),
+            )
+            for source in report.get("sources", []):
+                conn.execute(
+                    """INSERT INTO loop_source_freshness
+                    (entity_id, source_path, display_path, status,
+                     applied_sha256, observed_sha256, stale_targets_json,
+                     candidate_count, audit_id, checked_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        entity_id,
+                        source["path"],
+                        source["display_path"],
+                        source["status"],
+                        source.get("applied_sha256"),
+                        source.get("observed_sha256"),
+                        _canonical(source.get("stale_targets", {})),
+                        int(source.get("candidate_count", 0)),
+                        source.get("audit_id"),
+                        source["checked_at"],
+                    ),
+                )
+            conn.commit()
+
+    def source_freshness(self, *, entity_id: str) -> dict:
+        with self.store.connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM loop_source_freshness
+                WHERE entity_id=? ORDER BY display_path, source_path""",
+                (entity_id,),
+            ).fetchall()
+        sources: list[dict] = []
+        aggregate = {"semantic": [], "episodic": [], "rule": [], "state": []}
+        attention = {"review-required", "unavailable", "source-limit-exceeded"}
+        for row in rows:
+            source = dict(row)
+            source["stale_targets"] = json.loads(
+                source.pop("stale_targets_json")
+            )
+            sources.append(source)
+            for memory_type, identifiers in source["stale_targets"].items():
+                if memory_type in aggregate:
+                    aggregate[memory_type].extend(str(item) for item in identifiers)
+        return {
+            "sources": sources,
+            "attention_count": sum(row["status"] in attention for row in rows),
+            "stale_targets": {
+                key: list(dict.fromkeys(values))
+                for key, values in aggregate.items()
+            },
+        }
+
     def status(
         self,
         *,
@@ -774,6 +834,10 @@ class LoopLedger:
                 + (" AND entity_id=?" if entity_id else ""),
                 [entity_id] if entity_id else [],
             ).fetchone()[0]
+        freshness = self.source_freshness(entity_id=entity_id) if entity_id else {
+            "sources": [], "attention_count": 0,
+            "stale_targets": {"semantic": [], "episodic": [], "rule": [], "state": []},
+        }
         safe_sessions = []
         for row in sessions:
             value = dict(row)
@@ -814,6 +878,11 @@ class LoopLedger:
             "pending_review": int(candidate_count),
             "pending_mirrors": int(pending_mirror_count),
             "event_issues": safe_issues,
+            "source_freshness": freshness["sources"],
+            "source_attention_count": freshness["attention_count"],
+            "stale_source_record_count": sum(
+                len(values) for values in freshness["stale_targets"].values()
+            ),
             "active": bool(active_candidates),
             "active_session_sha256": (
                 active_candidates[0][1] if active_candidates else None
@@ -844,11 +913,81 @@ class LoopCoordinator:
         self.auto_store_artifact_events = bool(
             config.get("auto_store_artifact_events", True)
         )
+        self.monitor_import_sources = bool(
+            config.get("monitor_import_sources", True)
+        )
         self.assembler = ContextAssembler(
             runtime,
             max_bytes=int(config.get("max_context_bytes", DEFAULT_CONTEXT_BYTES)),
             max_record_bytes=int(config.get("max_record_bytes", DEFAULT_RECORD_BYTES)),
         )
+
+    def _refresh_source_freshness(self) -> dict:
+        if not self.monitor_import_sources:
+            return self.ledger.source_freshness(entity_id=self.entity["id"])
+        report = inspect_source_freshness(
+            self.runtime.home,
+            self.runtime.store,
+            entity=self.entity["id"],
+            root=self.project_root,
+            save_changed_audits=True,
+        )
+        self.ledger.replace_source_freshness(report)
+        safe_sources = [
+            {
+                "path": source["display_path"],
+                "status": source["status"],
+                "applied_sha256": source.get("applied_sha256"),
+                "observed_sha256": source.get("observed_sha256"),
+                "stale_record_count": sum(
+                    len(values) for values in source["stale_targets"].values()
+                ),
+                "candidate_count": source["candidate_count"],
+                "audit_id": source.get("audit_id"),
+            }
+            for source in report["sources"]
+        ]
+        identity = [self.entity["id"], safe_sources]
+        self.runtime.store.append_audit_once(
+            {
+                "id": f"audit_freshness_{_digest(identity)[:16]}",
+                "event": "source_freshness",
+                "entity_id": self.entity["id"],
+                "attention_count": report["attention_count"],
+                "sources": safe_sources,
+                "created_at": report["checked_at"],
+            }
+        )
+        return self.ledger.source_freshness(entity_id=self.entity["id"])
+
+    def _freshness_context(self) -> tuple[dict[str, set[str]], list[dict]]:
+        snapshot = self.ledger.source_freshness(entity_id=self.entity["id"])
+        exclusions = {
+            memory_type: {str(item) for item in identifiers}
+            for memory_type, identifiers in snapshot["stale_targets"].items()
+        }
+        notices: list[dict] = []
+        for source in snapshot["sources"]:
+            if source["status"] not in {
+                "review-required", "unavailable", "source-limit-exceeded"
+            }:
+                continue
+            stale_count = sum(
+                len(values) for values in source["stale_targets"].values()
+            )
+            audit_id = source.get("audit_id")
+            notices.append(
+                {
+                    "id": f"freshness_{_digest([source['display_path'], source['status'], source.get('observed_sha256')])[:12]}",
+                    "path": source["display_path"],
+                    "status": source["status"],
+                    "stale_records_suppressed": stale_count,
+                    "review_candidates": int(source.get("candidate_count", 0)),
+                    "audit_id": audit_id,
+                    "next": f"brain-ai review {audit_id}" if audit_id else "restore or re-audit the source",
+                }
+            )
+        return exclusions, notices
 
     def _validate_payload(self, payload: dict) -> tuple[str, str, str | None]:
         if not isinstance(payload, dict):
@@ -1057,6 +1196,11 @@ class LoopCoordinator:
         *,
         record_audit: bool,
     ) -> dict:
+        refresh_error = None
+        try:
+            self._refresh_source_freshness()
+        except Exception as exc:
+            refresh_error = _error_reference(exc)
         handoff = self.runtime.resume(self.entity["id"])
         if handoff.get("status") != "not_found":
             self.ledger.deliver_handoff(
@@ -1065,10 +1209,40 @@ class LoopCoordinator:
                 session_id=session_id,
                 entity_id=self.entity["id"],
             )
-        capsule = self.assembler.for_session(self.entity["id"], handoff)
+        exclusions, notices = self._freshness_context()
+        capsule = self.assembler.for_session(
+            self.entity["id"],
+            handoff,
+            exclusions=exclusions,
+            freshness_notices=notices,
+        )
         if record_audit:
             self._audit_context(event_key, session_id, capsule)
-        return self._context_result(capsule)
+        result = self._context_result(capsule)
+        if refresh_error:
+            result["system_message"] = (
+                "Brain-AI Memory could not refresh one source snapshot; cached "
+                f"freshness controls remain active (error ref: {refresh_error})."
+            )
+        elif notices:
+            stale_count = sum(
+                int(notice["stale_records_suppressed"]) for notice in notices
+            )
+            audit_ids = [
+                str(notice["audit_id"])
+                for notice in notices
+                if notice.get("audit_id")
+            ]
+            next_step = (
+                f" Review {audit_ids[0]} before promoting the changed source."
+                if audit_ids
+                else " Restore or re-audit the unavailable source."
+            )
+            result["system_message"] = (
+                f"Brain-AI Memory suppressed {stale_count} stale source-derived "
+                f"record(s) across {len(notices)} source(s).{next_step}"
+            )
+        return result
 
     def _on_prompt(
         self,
@@ -1084,7 +1258,13 @@ class LoopCoordinator:
         prompt = payload.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             return {}
-        capsule = self.assembler.for_query(prompt, self.entity["id"])
+        exclusions, notices = self._freshness_context()
+        capsule = self.assembler.for_query(
+            prompt,
+            self.entity["id"],
+            exclusions=exclusions,
+            freshness_notices=notices,
+        )
         if record_audit:
             self._audit_context(event_key, session_id, capsule, query=prompt)
         return self._context_result(capsule)
@@ -1096,7 +1276,24 @@ class LoopCoordinator:
         action = tool_input.get("command") if isinstance(tool_input, dict) else None
         if not isinstance(action, str) or not action.strip():
             return {}
-        gate = self.runtime.gate(action, entity=self.entity["id"])
+        exclusions, _ = self._freshness_context()
+        if exclusions.get("rule"):
+            # A changed source is enough to distrust the old procedural rule,
+            # but not enough to conclude that removing the guard is safe. Hold
+            # supported actions until the source is reviewed and reapplied.
+            return {
+                "blocked": True,
+                "rule_id": "source-freshness-review",
+                "reason": (
+                    "Blocked because an imported procedural source changed; "
+                    "review is required (source-freshness-review)."
+                ),
+            }
+        gate = self.runtime.gate(
+            action,
+            entity=self.entity["id"],
+            exclude_rule_ids=exclusions.get("rule", set()),
+        )
         if gate["allowed"]:
             if gate["effect"] == "warn":
                 source_ids = [str(item) for item in gate.get("rule_ids", [])][:8]
@@ -1169,7 +1366,18 @@ class LoopCoordinator:
             # stable record id under the JSONL lock on every mirror attempt.
             self.runtime.store.append_event_once(event_record)
             self.ledger.mark_candidate_mirrored(candidate["id"])
-            return {"candidate_id": candidate["id"]}
+            freshness = self._refresh_source_freshness()
+            result = {"candidate_id": candidate["id"]}
+            if freshness["attention_count"]:
+                stale_count = sum(
+                    len(values)
+                    for values in freshness["stale_targets"].values()
+                )
+                result["system_message"] = (
+                    f"Brain-AI Memory detected imported-source drift and suppressed "
+                    f"{stale_count} stale record(s); inspect the next source audit."
+                )
+            return result
         if operation == "brain_checkpoint":
             self.ledger.acknowledge_explicit_checkpoint(event_key)
         elif operation in {"brain_remember", "brain_supersede"}:

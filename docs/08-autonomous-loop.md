@@ -17,10 +17,10 @@ explicit project root and one explicit memory entity.
 
 | Moment | Brain-AI Memory does |
 |---|---|
-| A session starts | Recovers any interrupted checkpoint, resumes the latest handoff, and supplies a byte-bounded set of current project records. |
+| A session starts | Recovers any interrupted checkpoint, checks approved project-local import sources, resumes the latest handoff, and supplies a byte-bounded set of current project records. |
 | You send a prompt | Recalls relevant records from the same project and supplies them as sourced data, not instructions. |
 | A supported command is about to run | Checks project-scoped block rules at the wired boundary. |
-| A supported edit or memory write finishes | Records bounded change metadata, deduplicates repeated hook delivery, and marks the session as changed. |
+| A supported edit or memory write finishes | Records bounded change metadata, rechecks approved import sources, deduplicates repeated hook delivery, and marks the session as changed. |
 | Context is compacted or a turn/session ends | Writes an idempotent checkpoint only when something memory-relevant changed. |
 | The next session starts | Marks the latest handoff as delivered, then acknowledges delivery bookkeeping on the first prompt. |
 
@@ -28,10 +28,38 @@ The default injected context has a hard 6,000-byte ceiling, including a safety
 envelope and source identifiers. Records that do not fit are omitted instead
 of allowing the hook to grow the context without a bound.
 
-This is lifecycle automation, not automatic truth inference. The loop does not
-decide that a sentence is current, turn prose into exact state, promote a new
-rule, or replace an old fact on its own. Those changes still use explicit
+This is lifecycle automation, not automatic truth inference. The loop can tell
+that an exact approved source fragment changed or disappeared. It cannot tell
+whether the replacement text is true, turn prose into exact state, promote a
+new rule, or replace an old fact on its own. Those changes still use explicit
 memory tools or the review workflow.
+
+## Source freshness and reconsolidation
+
+An approved Markdown import remains the evidence behind its derived records.
+At session start, and after a supported project edit, the loop compares the
+current project-local source with the fragments recorded at apply time.
+
+- Unchanged fragments stay available.
+- Records whose source fragment disappeared are withheld from automatic recall.
+- A stale imported rule puts the automatic action gate into a fail-closed
+  review hold; changing source text cannot silently remove an approved guard.
+- A changed source receives an ordinary audit for the existing review and
+  apply workflow. Nothing in that audit is promoted automatically.
+- A missing, unreadable, out-of-project, or over-limit source is treated as
+  unavailable; its derived records remain in history but are withheld.
+
+This is a bounded prediction-error and reconsolidation step: detect a mismatch,
+inhibit unsupported memory or action, then require a reviewed update. It is not a claim
+that the software reproduces a biological brain or can judge truth. The check
+is limited to 32 approved sources per entity and 2 MiB per source. Its cached
+result makes prompt recall and pre-action checks use the latest completed
+snapshot without reading source files at those latency-sensitive boundaries.
+
+`brain-ai doctor --host ... --mode loop` reports a source that needs attention
+and points to the generated review audit. Manual tools-only recall is not
+filtered by this loop cache; review and apply the changed source before relying
+on it outside automatic mode.
 
 ## Install and create one project identity
 
@@ -128,10 +156,13 @@ By default, the loop does **not** persist:
 
 It keeps hashes and lengths needed for idempotency and audit, tool names and
 input-key names, one-way hashes of host session and turn identifiers, selected
-memory IDs, and relative paths for supported project file edits. Explicit calls
-to memory-writing tools still store the content you asked them to store. The
-typed memory, audit ledger, and checkpoints are local plaintext files, not
-encrypted storage.
+memory IDs, relative paths for supported project file edits, and the source
+paths, hashes, status, and affected record IDs needed for the freshness cache.
+The freshness check reads approved Markdown locally; it does not add raw source
+text to the cache. A changed source uses the same local audit artifacts as a
+manual `brain-ai audit`. Explicit calls to memory-writing tools still store the
+content you asked them to store. The typed memory, audit ledger, audits, and
+checkpoints are local plaintext files, not encrypted storage.
 
 The v0.6 audit, episode, and checkpoint JSONL histories are append-only. Loop
 coordination receipts and current delivery state live in SQLite. Neither store

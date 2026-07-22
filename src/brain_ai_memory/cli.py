@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import shlex
 import sys
 from pathlib import Path
@@ -32,8 +33,9 @@ from .workspace import (
 )
 
 CONNECTION_INSTALL_HINT = (
-    "install agent connection support from the repository checkout with "
-    "python -m pip install '.[mcp]'"
+    "install agent connection support with "
+    "python -m pip install 'brain-ai-memory[mcp]' "
+    "(repository checkout: python -m pip install '.[mcp]')"
 )
 
 
@@ -55,6 +57,29 @@ def build_parser() -> argparse.ArgumentParser:
 
     init = sub.add_parser("init", help="initialize a local runtime")
     init.add_argument("--json", action="store_true")
+
+    setup = sub.add_parser(
+        "setup",
+        help="preview or set up project memory for Codex or Claude Code",
+    )
+    setup.add_argument("host", choices=("codex", "claude-code"))
+    setup.add_argument(
+        "--entity",
+        help="stable project name (default: the project directory name)",
+    )
+    setup.add_argument(
+        "--mode",
+        choices=("tools", "loop"),
+        default="loop",
+        help="loop: automatic session memory (default); tools: on-demand calls",
+    )
+    setup.add_argument("--project-root", default=".")
+    setup.add_argument(
+        "--apply",
+        action="store_true",
+        help="create or reuse the project entity, apply the shown config, and run doctor",
+    )
+    setup.add_argument("--json", action="store_true")
 
     audit = sub.add_parser("audit", help="inspect an existing Markdown memory file without changing it")
     audit.add_argument("path", nargs="?", help="MEMORY.md (auto-detects ./.claude/MEMORY.md or ./MEMORY.md)")
@@ -363,6 +388,31 @@ def doctor(
                 and checks["mcp_support_installed"]
                 and checks["connection"]["active"]
             )
+            lifecycle = checks["connection"].get("lifecycle", {})
+            checks["source_attention_count"] = int(
+                lifecycle.get("source_attention_count", 0)
+            )
+            checks["stale_source_record_count"] = int(
+                lifecycle.get("stale_source_record_count", 0)
+            )
+            if checks["source_attention_count"]:
+                checks["ready"] = False
+                source = next(
+                    (
+                        item
+                        for item in lifecycle.get("source_freshness", [])
+                        if item.get("status")
+                        in {"review-required", "unavailable", "source-limit-exceeded"}
+                    ),
+                    {},
+                )
+                audit_id = source.get("audit_id")
+                checks["next_action"] = (
+                    f"review source changes: brain-ai --home "
+                    f"{shlex.quote(str(runtime.home))} review {audit_id}"
+                    if audit_id
+                    else "restore the unavailable imported memory source, then start a new session"
+                )
             if checks["configured"] and not checks["active"]:
                 loop_error = checks["connection"]["lifecycle"].get("loop_error")
                 if loop_error:
@@ -413,6 +463,139 @@ def doctor(
             "acknowledge each old rule with brain-ai rule disable RULE_ID --yes"
         )
     return checks
+
+
+def setup_agent(
+    home: Path,
+    host: str,
+    *,
+    entity: str | None = None,
+    mode: str = "loop",
+    project_root: str | Path = ".",
+    apply: bool = False,
+) -> dict:
+    """Preview or apply the existing safe connection workflow end to end.
+
+    Preview stays pure: it does not initialize the runtime, create an entity,
+    or write host configuration.  Apply reuses the same connection machinery
+    and finishes with the same doctor checks exposed by the standalone CLI.
+    """
+    if mode not in {"tools", "loop"}:
+        raise ValueError("setup mode must be tools or loop")
+    root = Path(project_root).expanduser().resolve()
+    if not root.is_dir():
+        raise ValueError(
+            f"project root does not exist or is not a directory: {root}"
+        )
+    selected_entity = (entity or root.name).strip()
+    if not selected_entity:
+        raise ValueError("--entity is required when the project directory has no name")
+
+    change = loop_connection_change if mode == "loop" else connection_change
+    options = {
+        "entity": selected_entity,
+        "scope": "project",
+        "project_root": root,
+        "apply": False,
+    }
+    preview = change(home, host, **options)
+    next_command = (
+        f"brain-ai --home {shlex.quote(str(home))} setup {host} "
+        f"--entity {shlex.quote(selected_entity)} --mode {mode} "
+        f"--project-root {shlex.quote(str(root))} --apply"
+    )
+    base = {
+        "host": host,
+        "mode": mode,
+        "scope": "project",
+        "project_root": str(root),
+        "home": str(home),
+        "entity": selected_entity,
+        "connection": preview,
+    }
+    if not apply:
+        return {
+            **base,
+            "status": "preview",
+            "applied": False,
+            "entity_action": "ensure_project_entity",
+            "doctor": None,
+            "next": next_command,
+        }
+
+    if importlib.util.find_spec("mcp") is None:
+        raise ValueError(CONNECTION_INSTALL_HINT)
+
+    runtime = BrainAIRuntime(home)
+    try:
+        project = runtime.store.get_entity(selected_entity)
+        entity_created = False
+    except KeyError:
+        project = runtime.store.put_entity(
+            selected_entity,
+            entity_type="project",
+        )
+        entity_created = True
+    if project["type"] != "project":
+        raise ValueError(
+            f"entity '{selected_entity}' already exists as {project['type']}; "
+            "choose a project entity name"
+        )
+
+    entity_note = (
+        f"new empty project entity '{project['name']}' ({project['id']}) was kept"
+        if entity_created
+        else f"existing project entity '{project['name']}' ({project['id']}) was kept"
+    )
+    try:
+        applied_connection = change(
+            home,
+            host,
+            entity=selected_entity,
+            scope="project",
+            project_root=root,
+            apply=True,
+        )
+    except WorkflowConflict as exc:
+        raise WorkflowConflict(
+            "setup could not apply the host configuration; "
+            f"{entity_note} for a safe retry, and no memory was imported. "
+            f"Fix the reported host-config problem and retry: {next_command}. "
+            f"Cause: {exc}"
+        ) from exc
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        raise RuntimeError(
+            "setup could not apply the host configuration; "
+            f"{entity_note} for a safe retry, and no memory was imported. "
+            f"Fix the reported problem and retry: {next_command}. Cause: {exc}"
+        ) from exc
+    try:
+        diagnosis = doctor(
+            runtime,
+            host,
+            scope="project",
+            project_root=root,
+            entity=selected_entity,
+            mode=mode,
+        )
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        raise RuntimeError(
+            "setup applied the host configuration but doctor could not verify it; "
+            f"{entity_note}, and no memory was imported. Retry idempotently: "
+            f"{next_command}. Cause: {exc}"
+        ) from exc
+    return {
+        **base,
+        "status": "configured",
+        "applied": True,
+        "entity": selected_entity,
+        "entity_name": project["name"],
+        "entity_id": project["id"],
+        "entity_action": "created" if entity_created else "reused",
+        "connection": applied_connection,
+        "doctor": diagnosis,
+        "next": diagnosis.get("next_action"),
+    }
 
 
 def run_demo(runtime: BrainAIRuntime) -> dict:
@@ -670,14 +853,48 @@ def emit_doctor(value: dict, as_json: bool) -> None:
         print(f"Permission warning: {warning}")
     if value.get("quarantined_rule_count"):
         print(f"Quarantined legacy rules: {value['quarantined_rule_count']}")
+    if value.get("source_attention_count"):
+        print(
+            "Imported source attention: "
+            f"{value['source_attention_count']} source(s), "
+            f"{value.get('stale_source_record_count', 0)} stale record(s) suppressed"
+        )
     if value.get("next_action"):
         print(f"Next: {value['next_action']}")
 
 
+def emit_setup(value: dict, as_json: bool) -> None:
+    if as_json:
+        emit(value, True)
+        return
+    mode_label = "automatic session memory" if value["mode"] == "loop" else "on-demand tools"
+    print(f"Brain-AI Memory setup: {value['status']}")
+    print(f"Project: {value['project_root']}")
+    print(f"Entity: {value['entity']}")
+    print(f"Host: {value['host']} · {mode_label}")
+    if not value["applied"]:
+        print("No runtime, entity, or host configuration was changed.")
+        if value["connection"]["diff"]:
+            print(value["connection"]["diff"], end="")
+        print(f"Apply: {value['next']}")
+        return
+    print(f"Entity: {value['entity_action']} ({value['entity_id']})")
+    emit_doctor(value["doctor"], False)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    home = resolve_home(args.home)
     try:
+        if (
+            args.subcommand == "setup"
+            and args.home is None
+            and not os.environ.get("BRAIN_AI_HOME")
+        ):
+            home = resolve_home(
+                Path(args.project_root).expanduser().resolve() / ".brain-ai"
+            )
+        else:
+            home = resolve_home(args.home)
         # These commands deliberately run before BrainAIRuntime construction.
         # An audit preview must not create SQLite/config files as a side effect.
         if args.subcommand == "audit":
@@ -723,6 +940,19 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("rollback changes active memory; rerun with --yes")
             runtime = BrainAIRuntime(home)
             emit(rollback_batch(home, runtime.store, args.batch_or_review_id), args.json)
+            return 0
+        if args.subcommand == "setup":
+            emit_setup(
+                setup_agent(
+                    home,
+                    args.host,
+                    entity=args.entity,
+                    mode=args.mode,
+                    project_root=args.project_root,
+                    apply=args.apply,
+                ),
+                args.json,
+            )
             return 0
         if args.subcommand in {"connect", "disconnect"}:
             if (

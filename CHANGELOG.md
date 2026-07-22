@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.7.0 — 2026-07-22
+
+### Memory lifecycle
+
+- compare approved project-local Markdown sources with their applied fragments
+  at session start and after supported edits;
+- withhold source-derived records whose exact evidence changed, disappeared,
+  became unreadable, or moved outside the project from automatic recall, and
+  place automatic action gating in a fail-closed review hold when an imported
+  procedural source becomes stale;
+- preserve unchanged fragments, produce an ordinary review audit for changed
+  content, and require the existing reviewed apply path before reconsolidating
+  replacement facts, state, or rules; and
+- cache the completed freshness snapshot in SQLite, surface source attention in
+  injected context and `doctor`, and keep prompt and pre-action boundaries free
+  of source-file I/O.
+
+### Adoption
+
+- add a preview-first `brain-ai setup` command that creates or reuses one
+  project entity, configures Codex or Claude Code, and runs the existing
+  diagnostics without importing or approving memory;
+- make the project directory the default local runtime home while preserving
+  explicit `--home` and `BRAIN_AI_HOME` precedence; and
+- add a structured field-report form for real multi-session failures and
+  adoption blockers.
+
+### Distribution
+
+- add a release-triggered PyPI Trusted Publishing workflow that verifies the
+  tag and package version, runs the public suite, smoke-tests both wheel and
+  source distribution, and publishes the exact verified artifacts through
+  GitHub OIDC;
+- use a concise package-index landing page with absolute documentation,
+  language, image, security, and issue links instead of exposing broken
+  repository-relative links on PyPI; and
+- keep release credentials out of the repository and expand local ignore
+  rules for common environment, key, and credential files.
+
+### Verification
+
+- expand the public suite to 135 tests, including changed, comment-only, and
+  missing-source freshness cases, a stale-rule review hold, and end-to-end
+  `doctor` attention; and
+- continue to treat these as deterministic lifecycle and integration checks,
+  not evidence that the system can infer truth or improve end-to-end LLM answer
+  quality.
+
 ## 0.6.0 — 2026-07-16
 
 ### Added

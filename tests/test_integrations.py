@@ -21,10 +21,14 @@ from brain_ai_memory.integrations import (
     loop_connection_change,
     loop_connection_status,
 )
-from brain_ai_memory.cli import doctor, emit_doctor, main as cli_main
+from brain_ai_memory.cli import doctor, emit_doctor, main as cli_main, setup_agent
+from brain_ai_memory.loop import LoopCoordinator
 from brain_ai_memory.runtime import BrainAIRuntime
 from brain_ai_memory.workspace import (
     WorkflowConflict,
+    apply_review,
+    build_audit,
+    build_review,
     connection_change,
     connection_status,
 )
@@ -161,6 +165,339 @@ class LifecycleIntegrationTest(unittest.TestCase):
                 entity="Atlas",
                 project_root=missing,
             )
+
+    def test_setup_home_defaults_to_target_project_with_normal_precedence(self):
+        project = self.base / "outside-current-directory"
+        project.mkdir()
+        project_default = project / ".brain-ai"
+
+        def preview(arguments: list[str], environment_home: str = "") -> dict:
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with mock.patch.dict(
+                os.environ, {"BRAIN_AI_HOME": environment_home}
+            ), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                code = cli_main(
+                    [
+                        *arguments,
+                        "setup",
+                        "codex",
+                        "--project-root",
+                        str(project),
+                        "--json",
+                    ]
+                )
+            self.assertEqual(code, 0, stderr.getvalue())
+            return json.loads(stdout.getvalue())
+
+        default = preview([])
+        self.assertEqual(default["home"], str(project_default.resolve()))
+        self.assertFalse(project_default.exists())
+
+        explicit_home = self.base / "explicit-home"
+        explicit = preview(["--home", str(explicit_home)])
+        self.assertEqual(explicit["home"], str(explicit_home.resolve()))
+        self.assertFalse(explicit_home.exists())
+
+        environment_home = self.base / "environment-home"
+        selected_from_environment = preview([], str(environment_home))
+        self.assertEqual(
+            selected_from_environment["home"], str(environment_home.resolve())
+        )
+        self.assertFalse(environment_home.exists())
+
+    def test_setup_default_home_symlink_returns_a_clean_cli_error(self):
+        project = self.base / "symlink-home-project"
+        outside = self.base / "outside-runtime"
+        project.mkdir()
+        outside.mkdir()
+        linked_home = project / ".brain-ai"
+        try:
+            linked_home.symlink_to(outside, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("directory symbolic links are unavailable")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.dict(
+            os.environ, {"BRAIN_AI_HOME": ""}
+        ), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = cli_main(
+                [
+                    "setup",
+                    "codex",
+                    "--project-root",
+                    str(project),
+                    "--json",
+                ]
+            )
+
+        self.assertEqual(code, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("brain-ai: refusing to use a symbolic-link runtime directory", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_setup_preview_is_pure_apply_is_checked_and_reapply_is_idempotent(self):
+        project = self.base / "fresh-project"
+        project.mkdir()
+        source = project / "MEMORY.md"
+        source.write_text("# Facts\n\n- Remains source evidence.\n", encoding="utf-8")
+        home = project / ".brain-ai"
+        before = self.snapshot()
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = cli_main(
+                [
+                    "--home",
+                    str(home),
+                    "setup",
+                    "codex",
+                    "--project-root",
+                    str(project),
+                    "--json",
+                ]
+            )
+        self.assertEqual(code, 0, stderr.getvalue())
+        preview = json.loads(stdout.getvalue())
+        self.assertEqual(preview["status"], "preview")
+        self.assertFalse(preview["applied"])
+        self.assertEqual(preview["entity"], "fresh-project")
+        self.assertIn("setup codex", preview["next"])
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse(home.exists())
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch(
+            "brain_ai_memory.cli.importlib.util.find_spec", return_value=object()
+        ), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = cli_main(
+                [
+                    "--home",
+                    str(home),
+                    "setup",
+                    "codex",
+                    "--project-root",
+                    str(project),
+                    "--apply",
+                    "--json",
+                ]
+            )
+        self.assertEqual(code, 0, stderr.getvalue())
+        applied = json.loads(stdout.getvalue())
+        self.assertEqual(applied["status"], "configured")
+        self.assertEqual(applied["entity_action"], "created")
+        self.assertTrue(applied["doctor"]["configured"])
+        self.assertFalse(applied["doctor"]["active"])
+        self.assertEqual(source.read_text(encoding="utf-8"), "# Facts\n\n- Remains source evidence.\n")
+        project_entity = BrainAIRuntime(home).store.get_entity("fresh-project")
+        self.assertEqual(project_entity["type"], "project")
+
+        managed_after_first_apply = {
+            path.relative_to(project).as_posix(): path.read_bytes()
+            for root in (project / ".codex", home / "integrations")
+            for path in root.rglob("*")
+            if path.is_file()
+        }
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch(
+            "brain_ai_memory.cli.importlib.util.find_spec", return_value=object()
+        ), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = cli_main(
+                [
+                    "--home",
+                    str(home),
+                    "setup",
+                    "codex",
+                    "--project-root",
+                    str(project),
+                    "--apply",
+                    "--json",
+                ]
+            )
+        self.assertEqual(code, 0, stderr.getvalue())
+        reapplied = json.loads(stdout.getvalue())
+        self.assertEqual(reapplied["entity_action"], "reused")
+        self.assertFalse(reapplied["connection"]["changed"])
+        managed_after_reapply = {
+            path.relative_to(project).as_posix(): path.read_bytes()
+            for root in (project / ".codex", home / "integrations")
+            for path in root.rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(managed_after_reapply, managed_after_first_apply)
+        self.assertEqual(BrainAIRuntime(home).store.counts()["entities"], 1)
+        self.assertEqual(source.read_text(encoding="utf-8"), "# Facts\n\n- Remains source evidence.\n")
+
+        blocked_project = self.base / "missing-support-project"
+        blocked_project.mkdir()
+        blocked_home = blocked_project / ".brain-ai"
+        before_blocked = self.snapshot()
+        stderr = io.StringIO()
+        with mock.patch(
+            "brain_ai_memory.cli.importlib.util.find_spec", return_value=None
+        ), contextlib.redirect_stderr(stderr):
+            code = cli_main(
+                [
+                    "--home",
+                    str(blocked_home),
+                    "setup",
+                    "claude-code",
+                    "--project-root",
+                    str(blocked_project),
+                    "--apply",
+                ]
+            )
+        self.assertEqual(code, 2)
+        self.assertIn("brain-ai-memory[mcp]", stderr.getvalue())
+        self.assertEqual(self.snapshot(), before_blocked)
+        self.assertFalse(blocked_home.exists())
+
+    def test_setup_supports_claude_code_tools_mode_and_rejects_invalid_mode(self):
+        project = self.base / "claude-tools-project"
+        project.mkdir()
+        home = project / ".brain-ai"
+
+        with mock.patch(
+            "brain_ai_memory.cli.importlib.util.find_spec", return_value=object()
+        ):
+            configured = setup_agent(
+                home,
+                "claude-code",
+                entity="Research",
+                mode="tools",
+                project_root=project,
+                apply=True,
+            )
+            reapplied = setup_agent(
+                home,
+                "claude-code",
+                entity="Research",
+                mode="tools",
+                project_root=project,
+                apply=True,
+            )
+
+        self.assertEqual(configured["status"], "configured")
+        self.assertEqual(configured["mode"], "tools")
+        self.assertTrue(configured["doctor"]["ready"])
+        self.assertTrue((project / ".mcp.json").is_file())
+        self.assertEqual(reapplied["entity_action"], "reused")
+        self.assertFalse(reapplied["connection"]["changed"])
+
+        unused_home = project / "invalid-mode-home"
+        with self.assertRaisesRegex(ValueError, "tools or loop"):
+            setup_agent(
+                unused_home,
+                "codex",
+                entity="Research",
+                mode="automatic",
+                project_root=project,
+            )
+        self.assertFalse(unused_home.exists())
+
+    def test_setup_apply_failure_keeps_empty_entity_and_retry_succeeds(self):
+        project = self.base / "retryable-setup-project"
+        project.mkdir()
+        home = project / ".brain-ai"
+        codex_dir = project / ".codex"
+        codex_dir.mkdir()
+        config_path = codex_dir / "config.toml"
+        hooks_path = codex_dir / "hooks.json"
+        config_path.write_text(
+            'model = "existing-model"\n\n'
+            '[mcp_servers.existing]\n'
+            'command = "/usr/bin/printf"\n'
+            'args = ["existing"]\n',
+            encoding="utf-8",
+        )
+        hooks_path.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "SessionStart": [
+                            {
+                                "matcher": "custom-only",
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": "/usr/bin/printf existing",
+                                        "timeout": 5,
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        config_before = config_path.read_bytes()
+        hooks_before = hooks_path.read_bytes()
+        real_lifecycle_change = lifecycle_connection_change
+
+        def fail_lifecycle_apply(*args, **kwargs):
+            if kwargs.get("apply"):
+                raise WorkflowConflict("forced lifecycle apply failure")
+            return real_lifecycle_change(*args, **kwargs)
+
+        with mock.patch(
+            "brain_ai_memory.cli.importlib.util.find_spec", return_value=object()
+        ), mock.patch(
+            "brain_ai_memory.integrations.lifecycle_connection_change",
+            side_effect=fail_lifecycle_apply,
+        ):
+            with self.assertRaises(WorkflowConflict) as failed:
+                setup_agent(
+                    home,
+                    "codex",
+                    entity="Retryable",
+                    mode="loop",
+                    project_root=project,
+                    apply=True,
+                )
+
+        message = str(failed.exception)
+        self.assertIn("new empty project entity 'Retryable'", message)
+        self.assertIn("was kept for a safe retry", message)
+        self.assertIn("no memory was imported", message)
+        self.assertIn("setup codex", message)
+        self.assertEqual(config_path.read_bytes(), config_before)
+        self.assertEqual(hooks_path.read_bytes(), hooks_before)
+
+        retained_runtime = BrainAIRuntime(home)
+        retained = retained_runtime.store.get_entity("Retryable")
+        self.assertEqual(retained["type"], "project")
+        retained_counts = retained_runtime.store.counts()
+        self.assertEqual(retained_counts["entities"], 1)
+        for key in ("episodic", "semantic", "rules", "numerical_state"):
+            self.assertEqual(retained_counts[key], 0)
+
+        with mock.patch(
+            "brain_ai_memory.cli.importlib.util.find_spec", return_value=object()
+        ):
+            retried = setup_agent(
+                home,
+                "codex",
+                entity="Retryable",
+                mode="loop",
+                project_root=project,
+                apply=True,
+            )
+
+        self.assertEqual(retried["status"], "configured")
+        self.assertEqual(retried["entity_action"], "reused")
+        self.assertTrue(retried["doctor"]["configured"])
+        self.assertIn("brain-ai-memory managed MCP", config_path.read_text(encoding="utf-8"))
+        self.assertNotEqual(config_path.read_bytes(), config_before)
+        self.assertNotEqual(hooks_path.read_bytes(), hooks_before)
+        self.assertEqual(BrainAIRuntime(home).store.counts()["entities"], 1)
 
     def test_autonomous_loop_rejects_user_scope_without_mutation(self):
         before = self.snapshot()
@@ -899,6 +1236,79 @@ class LifecycleIntegrationTest(unittest.TestCase):
         self.assertIn("review the project hooks with /hooks", completed.stdout)
         self.assertIn("Agent connection support: installed", completed.stdout)
         self.assertNotIn('"configured"', completed.stdout)
+
+    def test_doctor_surfaces_changed_import_source_and_review_command(self):
+        source = self.project / "MEMORY.md"
+        source.write_text(
+            "# Facts\n\n- Atlas deploys on Friday.\n",
+            encoding="utf-8",
+        )
+        audit = build_audit(source, entity="Atlas", root=self.project)
+        review = build_review(audit, self.runtime.store, approve_ready=True)
+        apply_review(self.home, self.runtime.store, review, audit)
+        loop_connection_change(
+            self.home,
+            "codex",
+            entity="Atlas",
+            scope="project",
+            project_root=self.project,
+            apply=True,
+        )
+
+        source.write_text(
+            "# Facts\n\n- Atlas deploys on Thursday.\n",
+            encoding="utf-8",
+        )
+        coordinator = LoopCoordinator(
+            self.runtime,
+            host="codex",
+            entity="Atlas",
+            project_root=self.project,
+        )
+        base = {
+            "session_id": "source-drift-session",
+            "cwd": str(self.project),
+        }
+        coordinator.handle(
+            {**base, "hook_event_name": "SessionStart", "source": "startup"}
+        )
+        coordinator.handle(
+            {
+                **base,
+                "hook_event_name": "UserPromptSubmit",
+                "turn_id": "turn-1",
+                "prompt": "When does Atlas deploy?",
+            }
+        )
+        coordinator.handle(
+            {
+                **base,
+                "hook_event_name": "Stop",
+                "turn_id": "turn-1",
+                "last_assistant_message": "Done",
+            }
+        )
+
+        diagnosis = doctor(
+            self.runtime,
+            "codex",
+            scope="project",
+            project_root=self.project,
+            entity="Atlas",
+            mode="loop",
+        )
+        self.assertTrue(diagnosis["configured"])
+        self.assertTrue(diagnosis["active"])
+        self.assertFalse(diagnosis["ready"])
+        self.assertEqual(diagnosis["source_attention_count"], 1)
+        self.assertEqual(diagnosis["stale_source_record_count"], 1)
+        self.assertIn("review source changes", diagnosis["next_action"])
+        self.assertIn("review audit_", diagnosis["next_action"])
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            emit_doctor(diagnosis, False)
+        self.assertIn("Imported source attention: 1 source(s)", output.getvalue())
 
     def test_connect_apply_and_doctor_explain_missing_optional_support(self):
         loop_connection_change(

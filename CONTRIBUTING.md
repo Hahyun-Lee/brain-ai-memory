@@ -95,3 +95,12 @@ are proposing a new component or channel in the mapping, explain its failure mod
 and diagnostic, the same way the existing ones are written. If it is really a
 variant of an existing component, extending that one is usually better than
 adding a box.
+
+Before opening the PR, test the checkout in an isolated environment so an older
+globally installed `brain-ai-memory` cannot shadow the source you changed:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[mcp,plot]"
+.venv/bin/python -W error::ResourceWarning -m unittest discover -s tests -v
+```

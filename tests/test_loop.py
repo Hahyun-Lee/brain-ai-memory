@@ -14,6 +14,7 @@ from brain_ai_memory.context import ContextAssembler
 from brain_ai_memory.hook_cli import host_output
 from brain_ai_memory.loop import LoopCoordinator, LoopLedger
 from brain_ai_memory.runtime import BrainAIRuntime
+from brain_ai_memory.workspace import apply_review, build_audit, build_review
 
 
 class AutonomousLoopTest(unittest.TestCase):
@@ -45,6 +46,114 @@ class AutonomousLoopTest(unittest.TestCase):
             value["turn_id"] = turn
         value.update(extra)
         return value
+
+    def import_ready_memory(self, text: str) -> dict:
+        source = self.root / "MEMORY.md"
+        source.write_text(text, encoding="utf-8")
+        audit = build_audit(source, entity="Atlas", root=self.root)
+        review = build_review(audit, self.runtime.store, approve_ready=True)
+        return apply_review(self.home, self.runtime.store, review, audit)
+
+    def test_source_drift_suppresses_stale_memory_and_surfaces_reconsolidation_audit(self):
+        receipt = self.import_ready_memory(
+            "# Facts\n\n- Atlas deploys on Friday.\n"
+        )
+        semantic_id = receipt["results"][0]["target_id"]
+        coordinator = self.coordinator()
+
+        current = coordinator.handle(self.event("SessionStart", session="fresh"))
+        self.assertIn("Friday", current["context"])
+
+        (self.root / "MEMORY.md").write_text(
+            "# Facts\n\n- Atlas deploys on Thursday.\n",
+            encoding="utf-8",
+        )
+        drifted = coordinator.handle(self.event("SessionStart", session="drifted"))
+        self.assertNotIn("Friday", drifted["context"])
+        self.assertIn("suppressed 1 stale", drifted["system_message"])
+        self.assertIn('"type":"source-freshness"', drifted["context"])
+        self.assertIn('"status":"review-required"', drifted["context"])
+        self.assertIn("brain-ai review audit_", drifted["context"])
+
+        prompted = coordinator.handle(
+            self.event(
+                "UserPromptSubmit",
+                session="drifted",
+                turn="t1",
+                prompt="When does Atlas deploy?",
+            )
+        )
+        self.assertNotIn("Friday", prompted["context"])
+        status = coordinator.status()
+        self.assertEqual(status["source_attention_count"], 1)
+        self.assertEqual(status["stale_source_record_count"], 1)
+        self.assertIn(
+            semantic_id,
+            status["source_freshness"][0]["stale_targets"]["semantic"],
+        )
+
+    def test_stale_imported_rule_puts_automatic_action_gate_in_review_hold(self):
+        source = self.root / "MEMORY.md"
+        source.write_text(
+            "# Rules\n\n- Production deployment needs approval.\n",
+            encoding="utf-8",
+        )
+        audit = build_audit(source, entity="Atlas", root=self.root)
+        item_id = audit["entries"][0]["id"]
+        review = build_review(
+            audit,
+            self.runtime.store,
+            rules=[f"{item_id}=^deploy production$"],
+            rule_effect="block",
+        )
+        apply_review(self.home, self.runtime.store, review, audit)
+        coordinator = self.coordinator()
+        coordinator.handle(self.event("SessionStart", session="rule-current"))
+        blocked = coordinator.handle(
+            self.event(
+                "PreToolUse",
+                session="rule-current",
+                tool_name="Bash",
+                tool_input={"command": "deploy production"},
+            )
+        )
+        self.assertTrue(blocked["blocked"])
+
+        source.write_text(
+            "# Rules\n\n- Production deployment follows the new release process.\n",
+            encoding="utf-8",
+        )
+        coordinator.handle(self.event("SessionStart", session="rule-drifted"))
+        held = coordinator.handle(
+            self.event(
+                "PreToolUse",
+                session="rule-drifted",
+                tool_name="Bash",
+                tool_input={"command": "deploy production"},
+            )
+        )
+        self.assertTrue(held["blocked"])
+        self.assertEqual(held["rule_id"], "source-freshness-review")
+        self.assertNotEqual(held["rule_id"], blocked["rule_id"])
+
+    def test_missing_import_source_suppresses_its_records(self):
+        self.import_ready_memory("# Facts\n\n- Atlas deploys on Friday.\n")
+        coordinator = self.coordinator()
+        current = coordinator.handle(
+            self.event("SessionStart", session="source-present")
+        )
+        self.assertIn("Friday", current["context"])
+
+        (self.root / "MEMORY.md").unlink()
+        missing = coordinator.handle(
+            self.event("SessionStart", session="source-missing")
+        )
+        self.assertNotIn("Friday", missing["context"])
+        self.assertIn("suppressed 1 stale", missing["system_message"])
+        self.assertIn('"status":"unavailable"', missing["context"])
+        status = coordinator.status()
+        self.assertEqual(status["source_attention_count"], 1)
+        self.assertEqual(status["stale_source_record_count"], 1)
 
     def test_session_and_prompt_context_are_bounded_and_do_not_persist_prompt(self):
         self.runtime.store.put_knowledge(

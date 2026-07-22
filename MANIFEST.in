@@ -1,3 +1,5 @@
+include PYPI_README.md
+exclude README.md
 include benchmarks/run_component_ablation.py
 include benchmarks/component_ablation_cases.jsonl
 include benchmarks/pilots/component-ablation-20260715/manifest.json
