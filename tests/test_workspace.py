@@ -31,6 +31,7 @@ from brain_ai_memory.workspace import (
     connection_change,
     connection_status,
     discover_memory_file,
+    inspect_source_freshness,
     rollback_batch,
 )
 
@@ -61,6 +62,86 @@ class WorkspaceWorkflowTest(unittest.TestCase):
         finally:
             os.chdir(previous)
         return status, stdout.getvalue(), stderr.getvalue()
+
+    def apply_ready_memory(self, text: str) -> tuple[BrainAIRuntime, dict]:
+        self.write_memory(text)
+        runtime = BrainAIRuntime(self.home)
+        audit = build_audit(self.source, entity="Atlas", root=self.root)
+        review = build_review(audit, runtime.store, approve_ready=True)
+        receipt = apply_review(self.home, runtime.store, review, audit)
+        return runtime, receipt
+
+    def test_source_freshness_creates_review_audit_and_marks_removed_fragment_stale(self):
+        runtime, receipt = self.apply_ready_memory(
+            "# Facts\n\n- Atlas deploys on Friday.\n"
+        )
+        semantic_id = receipt["results"][0]["target_id"]
+
+        current = inspect_source_freshness(
+            self.home,
+            runtime.store,
+            entity="Atlas",
+            root=self.root,
+        )
+        self.assertEqual(current["attention_count"], 0)
+        self.assertEqual(current["sources"][0]["status"], "current")
+
+        self.write_memory("# Facts\n\n- Atlas deploys on Thursday.\n")
+        changed = inspect_source_freshness(
+            self.home,
+            runtime.store,
+            entity="Atlas",
+            root=self.root,
+        )
+        source = changed["sources"][0]
+        self.assertEqual(changed["attention_count"], 1)
+        self.assertEqual(source["status"], "review-required")
+        self.assertEqual(source["stale_targets"]["semantic"], [semantic_id])
+        self.assertEqual(source["candidate_count"], 1)
+        self.assertTrue(source["audit_id"].startswith("audit_"))
+        self.assertTrue(
+            (self.home / "workflows" / "audits" / f"{source['audit_id']}.json").is_file()
+        )
+
+    def test_source_freshness_ignores_non_memory_comment_only_change(self):
+        runtime, _ = self.apply_ready_memory(
+            "# Facts\n\n- Atlas deploys on Friday.\n"
+        )
+        self.write_memory(
+            "# Facts\n\n- Atlas deploys on Friday.\n\n<!-- formatting note -->\n"
+        )
+
+        result = inspect_source_freshness(
+            self.home,
+            runtime.store,
+            entity="Atlas",
+            root=self.root,
+        )
+
+        self.assertEqual(result["attention_count"], 0)
+        self.assertEqual(result["sources"][0]["status"], "current-content")
+        self.assertEqual(result["sources"][0]["candidate_count"], 0)
+        self.assertTrue(
+            all(not values for values in result["sources"][0]["stale_targets"].values())
+        )
+
+    def test_top_level_version_is_pure(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        previous = Path.cwd()
+        try:
+            os.chdir(self.root)
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as stopped:
+                    cli_main(["--version"])
+        finally:
+            os.chdir(previous)
+
+        self.assertEqual(stopped.exception.code, 0)
+        self.assertRegex(stdout.getvalue(), r"^brain-ai \d+\.\d+\.\d+\n$")
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertFalse(self.home.exists())
+        self.assertEqual(list(self.root.iterdir()), [])
 
     def test_audit_no_save_is_pure_and_does_not_create_runtime_home(self):
         original = self.write_memory("# Facts\n\n- Atlas deploys on Thursday.\n")

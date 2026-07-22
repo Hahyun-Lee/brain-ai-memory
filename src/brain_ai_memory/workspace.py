@@ -43,6 +43,7 @@ WORKFLOW_SCHEMA = 1
 PARSER_VERSION = "markdown-memory-v2"
 MAX_SOURCE_BYTES = 2 * 1024 * 1024
 MAX_LINE_BYTES = 100_000
+MAX_TRACKED_IMPORT_SOURCES = 32
 ALLOWED_DECISIONS = {"semantic", "episodic", "state", "rule", "skip", "supersede"}
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -679,6 +680,218 @@ def save_audit(home: Path, audit: dict) -> Path:
             audit.update(existing)
             return path
     return _save_json(path, audit)
+
+
+def inspect_source_freshness(
+    home: Path,
+    store: MemoryStore,
+    *,
+    entity: str,
+    root: str | Path,
+    save_changed_audits: bool = True,
+) -> dict:
+    """Compare approved import sources with their current project-local content.
+
+    This is the prediction-error boundary for the automatic loop. It never
+    promotes or replaces memory. Instead it identifies source-derived records
+    whose exact fragment is no longer present, and optionally materializes an
+    ordinary review audit for the new source version.
+    """
+    project_root = Path(root).expanduser().resolve(strict=True)
+    if not project_root.is_dir():
+        raise ValueError("source freshness root must be a directory")
+    record_entity = store.get_entity(entity)
+    entity_id = record_entity["id"]
+    with store.connect() as conn:
+        batches = conn.execute(
+            """SELECT source_path, source_sha256, created_at
+            FROM import_batches
+            WHERE entity_id=? AND status='applied'
+            ORDER BY created_at DESC, id DESC""",
+            (entity_id,),
+        ).fetchall()
+        ledger_rows = conn.execute(
+            """SELECT source_path, source_sha256, fragment_sha256,
+                      memory_type, target_id, created_at
+            FROM import_ledger
+            WHERE entity_id=? AND status='active' AND target_id IS NOT NULL
+            ORDER BY created_at, id""",
+            (entity_id,),
+        ).fetchall()
+
+    latest_sources: dict[str, dict] = {}
+    for row in batches:
+        latest_sources.setdefault(row["source_path"], dict(row))
+    ledger_by_source: dict[str, list[dict]] = {}
+    for row in ledger_rows:
+        ledger_by_source.setdefault(row["source_path"], []).append(dict(row))
+
+    def target_map(rows: Iterable[dict]) -> dict[str, list[str]]:
+        output = {"semantic": [], "episodic": [], "rule": [], "state": []}
+        for row in rows:
+            memory_type = (
+                "semantic" if row.get("memory_type") == "supersede"
+                else str(row.get("memory_type") or "")
+            )
+            target_id = row.get("target_id")
+            if memory_type in output and target_id:
+                output[memory_type].append(str(target_id))
+        return {key: list(dict.fromkeys(values)) for key, values in output.items()}
+
+    sources: list[dict] = []
+    ordered_sources = list(latest_sources.items())
+    for position, (source_path, batch) in enumerate(ordered_sources):
+        source_rows = ledger_by_source.get(source_path, [])
+        try:
+            canonical = Path(source_path).expanduser().resolve(strict=True)
+            display_path = canonical.relative_to(project_root).as_posix()
+        except (OSError, ValueError):
+            display_path = Path(source_path).name or "[unavailable-source]"
+            sources.append(
+                {
+                    "path": source_path,
+                    "display_path": display_path,
+                    "status": "unavailable",
+                    "applied_sha256": batch["source_sha256"],
+                    "observed_sha256": None,
+                    "stale_targets": target_map(source_rows),
+                    "candidate_count": 0,
+                    "audit_id": None,
+                    "checked_at": utc_now(),
+                }
+            )
+            continue
+        if position >= MAX_TRACKED_IMPORT_SOURCES:
+            sources.append(
+                {
+                    "path": str(canonical),
+                    "display_path": display_path,
+                    "status": "source-limit-exceeded",
+                    "applied_sha256": batch["source_sha256"],
+                    "observed_sha256": None,
+                    "stale_targets": target_map(source_rows),
+                    "candidate_count": 0,
+                    "audit_id": None,
+                    "checked_at": utc_now(),
+                }
+            )
+            continue
+        try:
+            observed_path, observed_raw, _ = _read_markdown(
+                canonical,
+                allowed_root=project_root,
+            )
+            observed_sha = _digest(observed_raw)
+            if observed_sha == batch["source_sha256"]:
+                sources.append(
+                    {
+                        "path": str(observed_path),
+                        "display_path": display_path,
+                        "status": "current",
+                        "applied_sha256": batch["source_sha256"],
+                        "observed_sha256": observed_sha,
+                        "stale_targets": target_map([]),
+                        "candidate_count": 0,
+                        "audit_id": None,
+                        "checked_at": utc_now(),
+                    }
+                )
+                continue
+
+            audit = build_audit(
+                observed_path,
+                entity=record_entity["name"],
+                root=project_root,
+            )
+            current_fragments = {
+                item["fragment_sha256"] for item in audit["entries"]
+            }
+            imported_fragments = {
+                str(row["fragment_sha256"]) for row in source_rows
+            }
+            current_target_keys = {
+                (
+                    "semantic" if row["memory_type"] == "supersede"
+                    else row["memory_type"],
+                    row["target_id"],
+                )
+                for row in source_rows
+                if row["fragment_sha256"] in current_fragments
+            }
+            stale_rows = [
+                row
+                for row in source_rows
+                if row["fragment_sha256"] not in current_fragments
+                and (
+                    "semantic" if row["memory_type"] == "supersede"
+                    else row["memory_type"],
+                    row["target_id"],
+                ) not in current_target_keys
+            ]
+            candidate_count = sum(
+                item["fragment_sha256"] not in imported_fragments
+                for item in audit["entries"]
+            )
+            stale_targets = target_map(stale_rows)
+            stale_count = sum(len(values) for values in stale_targets.values())
+            audit_id = None
+            status = "current-content"
+            if stale_count or candidate_count:
+                status = "review-required"
+                audit_id = audit["id"]
+                if save_changed_audits:
+                    save_audit(home, audit)
+            sources.append(
+                {
+                    "path": str(observed_path),
+                    "display_path": display_path,
+                    "status": status,
+                    "applied_sha256": batch["source_sha256"],
+                    "observed_sha256": observed_sha,
+                    "stale_targets": stale_targets,
+                    "candidate_count": int(candidate_count),
+                    "audit_id": audit_id,
+                    "checked_at": utc_now(),
+                }
+            )
+        except (OSError, UnicodeError, ValueError):
+            sources.append(
+                {
+                    "path": str(canonical),
+                    "display_path": display_path,
+                    "status": "unavailable",
+                    "applied_sha256": batch["source_sha256"],
+                    "observed_sha256": None,
+                    "stale_targets": target_map(source_rows),
+                    "candidate_count": 0,
+                    "audit_id": None,
+                    "checked_at": utc_now(),
+                }
+            )
+
+    aggregate = {"semantic": [], "episodic": [], "rule": [], "state": []}
+    for source in sources:
+        for memory_type, identifiers in source["stale_targets"].items():
+            aggregate[memory_type].extend(identifiers)
+    aggregate = {
+        key: list(dict.fromkeys(values)) for key, values in aggregate.items()
+    }
+    return {
+        "schema_version": 1,
+        "entity_id": entity_id,
+        "entity_name": record_entity["name"],
+        "project_root": str(project_root),
+        "source_count": len(sources),
+        "attention_count": sum(
+            source["status"] in {
+                "review-required", "unavailable", "source-limit-exceeded"
+            }
+            for source in sources
+        ),
+        "stale_targets": aggregate,
+        "sources": sources,
+        "checked_at": utc_now(),
+    }
 
 
 def _artifact_path(home: Path, kind: str, reference: str) -> Path:
@@ -1591,6 +1804,15 @@ def apply_review(home: Path, store: MemoryStore, review: dict, audit: dict) -> d
     }
     _save_json(_workflow_root(home) / "receipts" / f"{batch_id}.json", receipt)
     store.append_audit({"event": "markdown_memory_apply", **receipt})
+    # A successful apply establishes a new current projection. Remove any
+    # cached drift verdict immediately; the next loop event will repopulate a
+    # complete source snapshot from the new batch.
+    with store.connect() as conn:
+        conn.execute(
+            """DELETE FROM loop_source_freshness
+            WHERE entity_id=? AND source_path=?""",
+            (entity_id, review["source"]["path"]),
+        )
     return receipt
 
 

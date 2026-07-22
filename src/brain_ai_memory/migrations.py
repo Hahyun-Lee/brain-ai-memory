@@ -10,13 +10,14 @@ from __future__ import annotations
 import sqlite3
 
 
-LOOP_SCHEMA_VERSION = 3
+LOOP_SCHEMA_VERSION = 4
 LOOP_TABLES = {
     "loop_sessions",
     "loop_events",
     "loop_candidates",
     "loop_checkpoints",
     "handoff_deliveries",
+    "loop_source_freshness",
 }
 
 
@@ -136,6 +137,23 @@ def migrate_loop_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_handoff_deliveries_status
             ON handoff_deliveries(host, session_id, entity_id, status);
+
+        CREATE TABLE IF NOT EXISTS loop_source_freshness (
+            entity_id TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            display_path TEXT NOT NULL,
+            status TEXT NOT NULL,
+            applied_sha256 TEXT,
+            observed_sha256 TEXT,
+            stale_targets_json TEXT NOT NULL DEFAULT '{}',
+            candidate_count INTEGER NOT NULL DEFAULT 0,
+            audit_id TEXT,
+            checked_at TEXT NOT NULL,
+            PRIMARY KEY(entity_id, source_path),
+            FOREIGN KEY(entity_id) REFERENCES entities(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_loop_source_freshness_status
+            ON loop_source_freshness(entity_id, status, checked_at);
 
         """
     )

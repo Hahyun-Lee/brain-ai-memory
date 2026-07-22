@@ -38,16 +38,17 @@ untouched.
 
 ## See it in 60 seconds
 
-Install from the repository, then run the synthetic tour in a disposable
+Install the package from PyPI, then run the synthetic tour in a disposable
 directory before touching a real memory file:
 
 ```bash
-git clone https://github.com/Hahyun-Lee/brain-ai-memory.git
-cd brain-ai-memory
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install .
+python -m pip install brain-ai-memory
 ```
+
+Source checkout fallback: clone this repository and run `python -m pip install .`
+inside it.
 
 ```bash
 DEMO_HOME="$(mktemp -d)"
@@ -69,7 +70,7 @@ Optional action checks
 The tour proves the local package runs; it does not import your files or show
 autonomous agent behavior.
 
-**What is tested:** the complete 123-test suite runs on Python 3.12; the
+**What is tested:** the complete 135-test suite runs on Python 3.12; the
 core runtime and adoption workflow also run on Python 3.10 and 3.11. Clean-wheel
 checks cover a real process restart/resume, subprocess host-hook setup,
 automatic checkpoint/resume, and 20/20 component contracts. This is integration
@@ -98,14 +99,10 @@ and checkpoints observed changes without saving the raw conversation.
 
 ## Adopt an existing MEMORY.md
 
-If you did not run the tour above, install the base package from a checkout:
+If you did not run the tour above, install the base package:
 
 ```bash
-git clone https://github.com/Hahyun-Lee/brain-ai-memory.git
-cd brain-ai-memory
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install .
+python -m pip install brain-ai-memory
 ```
 
 From the project that owns the memory file, pin one project root and local
@@ -200,48 +197,58 @@ turn with relevant changes to leave a checkpoint without relying on the agent
 to remember every call. Changes are previewed before anything is written.
 
 ```bash
-# Install the automatic-session extra from the downloaded repository
-cd /path/to/brain-ai-memory
-python -m pip install ".[mcp]"
+# Install the agent-connection support once
+python -m pip install "brain-ai-memory[mcp]"
 
-# Then run once from the project that owns this memory
+# Run from the project that will own this memory
 cd /path/to/your/project
-export PROJECT_ROOT="$PWD"
-export BRAIN_AI_HOME="$PROJECT_ROOT/.brain-ai"
-brain-ai init
-brain-ai entity add --name my-project --type project  # skip if it already exists
-
-# Codex: preview, apply, then open a new Codex session in this project
-brain-ai connect codex --entity my-project --mode loop --project-root "$PROJECT_ROOT"
-brain-ai connect codex --entity my-project --mode loop --project-root "$PROJECT_ROOT" --apply
-brain-ai doctor --host codex --entity my-project --mode loop --project-root "$PROJECT_ROOT"
+brain-ai setup codex --entity my-project
+brain-ai setup codex --entity my-project --apply
 ```
 
+Source checkout fallback: run `python -m pip install ".[mcp]"` inside the
+repository instead of the install command above.
+
 For Claude Code, replace `codex` with `claude-code`. If you imported a
-`MEMORY.md`, that import already created the project entity. Codex asks you to
-trust the exact project hooks; review them with `/hooks`, then start a fresh
-session. `doctor` reports `configured` after installation and `active` only
-after one real start → prompt → stop cycle has been observed.
+`MEMORY.md`, setup reuses that project entity; it never imports or approves
+memory on its own. The first command is a pure preview. `--apply` creates an
+empty project entity only when needed, applies the same checked config diff,
+and runs `doctor`. Codex asks you to trust the exact project hooks; review them
+with `/hooks`, then start a fresh session. `doctor` reports `configured` after
+installation and `active` only after one real start → prompt → stop cycle has
+been observed.
 
 Automatic mode is deliberately project-only. At session start it supplies the
 latest handoff and a hard byte-bounded set of current records. Each prompt is
 used transiently to select relevant records from that same project. It does not
 store raw prompts, raw tool output, assistant messages, or edited file contents,
 and it never promotes a sentence to a fact, rule, or exact state on its own.
+
+If an approved `MEMORY.md` changes, the loop checks its source fragments at
+session start and after supported edits. Records that are no longer supported
+by the current file remain in the audit history but are withheld from automatic
+recall. If an imported procedural rule becomes stale, supported actions enter a
+fail-closed review hold instead of silently losing the approved guard.
+The changed file becomes a normal review audit, so new or replacement entries
+can use the existing review and reconsolidation workflow. Unchanged fragments
+remain available. This prevents stale memory from acting as current memory
+without turning the loop into an automatic truth judge.
+
 See [Automatic session memory](docs/08-autonomous-loop.md) for the event flow,
 privacy boundary, host differences, and removal commands.
 
-If you only want on-demand memory tools, omit `--mode loop`:
+If you only want on-demand memory tools, select tools mode explicitly:
 
 ```bash
-brain-ai connect codex --entity my-project --project-root "$PROJECT_ROOT"
-brain-ai connect codex --entity my-project --project-root "$PROJECT_ROOT" --apply
+brain-ai setup codex --entity my-project --mode tools
+brain-ai setup codex --entity my-project --mode tools --apply
 ```
 
 In tools-only mode, Codex or Claude Code chooses when to recall, save, and
-checkpoint. `--scope user` is available only for that deliberate tools-only
-setup. `brain-ai disconnect ...` also previews its diff and requires `--apply`
-before changing host configuration.
+checkpoint. The lower-level `connect` command remains available for advanced
+configuration; its `--scope user` option is limited to deliberate tools-only
+connections. `brain-ai disconnect ...` also previews its diff and requires
+`--apply` before changing host configuration.
 
 Previews show only a sanitized view of the managed `brain-ai-memory` entry;
 unexpected environment data is redacted and unrelated host configuration is not
@@ -368,9 +375,9 @@ episodes, facts, rules, exact state, and action checks so that each failure can
 be debugged on its own. You can use the contracts without the brain labels.
 See the [mapping and its limits](docs/01-the-mapping.md).
 
-The current suite covers 40 adoption-workflow cases, 27 runtime cases, 5
-ablation cases, 1 packaged restart/resume case, 17 host-integration cases, 29
-automatic-loop cases, and 4 storage durability and concurrency cases (123
+The current suite covers 43 adoption-workflow cases, 27 runtime cases, 5
+ablation cases, 1 packaged restart/resume case, 23 host-integration cases, 32
+automatic-loop cases, and 4 storage durability and concurrency cases (135
 total).
 These tests do not yet show better end-to-end LLM answers than RAG or a simpler
 memory system. See the [evidence and limitations](#evidence-status).

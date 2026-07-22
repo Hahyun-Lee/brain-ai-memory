@@ -1,0 +1,276 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-verify:
+    name: Build and verify release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the released tag
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Install build and test dependencies
+        run: python -m pip install "build>=1.2,<2" "twine>=6,<7" ".[mcp,plot]"
+      - name: Require the release tag at the current default-branch tip
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+
+          def commit(reference: str) -> str:
+              result = subprocess.run(
+                  ["git", "rev-parse", "--verify", f"{reference}^{{commit}}"],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              return result.stdout.strip()
+
+          release_tag = os.environ["RELEASE_TAG"]
+          default_branch = os.environ["DEFAULT_BRANCH"]
+          tag_commit = commit(f"refs/tags/{release_tag}")
+          checkout_commit = commit("HEAD")
+          default_tip = commit(f"refs/remotes/origin/{default_branch}")
+          if checkout_commit != tag_commit:
+              raise SystemExit(
+                  f"checked-out commit {checkout_commit} != tag commit {tag_commit}"
+              )
+          if tag_commit != default_tip:
+              raise SystemExit(
+                  f"release tag commit {tag_commit} != current "
+                  f"{default_branch} tip {default_tip}"
+              )
+          PY
+      - name: Require release metadata to agree
+        env:
+          RELEASE_PUBLISHED_AT: ${{ github.event.release.published_at }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          import os
+          import tomllib
+          from pathlib import Path
+
+          import yaml
+
+          from brain_ai_memory import __version__
+
+          project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          citation = yaml.safe_load(Path("CITATION.cff").read_text(encoding="utf-8"))
+          package_version = project["project"]["version"]
+          citation_version = str(citation["version"])
+          citation_date = str(citation["date-released"])
+          release_tag = os.environ["RELEASE_TAG"]
+          published_at = os.environ["RELEASE_PUBLISHED_AT"]
+          published_date = datetime.fromisoformat(
+              published_at.replace("Z", "+00:00")
+          ).date().isoformat()
+          expected_tag = f"v{package_version}"
+          if __version__ != package_version:
+              raise SystemExit(
+                  f"package metadata {package_version!r} != runtime {__version__!r}"
+              )
+          if citation_version != package_version:
+              raise SystemExit(
+                  f"CITATION.cff version {citation_version!r} "
+                  f"!= package {package_version!r}"
+              )
+          if release_tag != expected_tag:
+              raise SystemExit(
+                  f"release tag {release_tag!r} != expected {expected_tag!r}"
+              )
+          if citation_date != published_date:
+              raise SystemExit(
+                  f"CITATION.cff date-released {citation_date!r} "
+                  f"!= release published date {published_date!r}"
+              )
+          PY
+      - name: Run the full public test suite
+        run: python -W error::ResourceWarning -m unittest discover -s tests -v
+      - name: Build wheel and source distribution
+        run: python -m build
+      - name: Validate distribution metadata
+        run: python -m twine check --strict dist/*
+      - name: Smoke-test the wheel
+        run: |
+          wheel="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.whl' -print -quit)"
+          test -n "$wheel"
+          python -m venv /tmp/brain-ai-wheel
+          /tmp/brain-ai-wheel/bin/python -m pip install "${wheel}[mcp]"
+          mkdir -p /tmp/brain-ai-wheel-project
+          cd /tmp/brain-ai-wheel-project
+          /tmp/brain-ai-wheel/bin/brain-ai \
+            setup codex --entity wheel-smoke --json \
+            > /tmp/brain-ai-wheel-preview.json
+          test ! -e .brain-ai
+          test ! -e .codex
+          /tmp/brain-ai-wheel/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+
+          preview = json.loads(Path("/tmp/brain-ai-wheel-preview.json").read_text())
+          project = Path("/tmp/brain-ai-wheel-project")
+          assert preview["status"] == "preview"
+          assert preview["applied"] is False
+          assert preview["home"] == str((project / ".brain-ai").resolve())
+          assert preview["doctor"] is None
+          PY
+          /tmp/brain-ai-wheel/bin/brain-ai \
+            setup codex --entity wheel-smoke --apply --json \
+            > /tmp/brain-ai-wheel-applied.json
+          /tmp/brain-ai-wheel/bin/python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          project = Path("/tmp/brain-ai-wheel-project")
+          applied = json.loads(Path("/tmp/brain-ai-wheel-applied.json").read_text())
+          assert applied["status"] == "configured"
+          assert applied["entity_action"] == "created"
+          assert applied["doctor"]["configured"] is True
+          assert applied["doctor"]["active"] is False
+          assert applied["doctor"]["ready"] is False
+          assert applied["doctor"]["mcp_support_installed"] is True
+          managed = [
+              project / ".codex" / "config.toml",
+              project / ".codex" / "hooks.json",
+              *sorted((project / ".brain-ai" / "integrations").glob("*.json")),
+          ]
+          assert all(path.is_file() for path in managed)
+          hashes = {
+              str(path.relative_to(project)): hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in managed
+          }
+          Path("/tmp/brain-ai-wheel-managed.json").write_text(
+              json.dumps(hashes, sort_keys=True)
+          )
+          PY
+          /tmp/brain-ai-wheel/bin/brain-ai \
+            setup codex --entity wheel-smoke --apply --json \
+            > /tmp/brain-ai-wheel-reapplied.json
+          /tmp/brain-ai-wheel/bin/python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          project = Path("/tmp/brain-ai-wheel-project")
+          reapplied = json.loads(Path("/tmp/brain-ai-wheel-reapplied.json").read_text())
+          expected = json.loads(Path("/tmp/brain-ai-wheel-managed.json").read_text())
+          observed = {
+              relative: hashlib.sha256((project / relative).read_bytes()).hexdigest()
+              for relative in expected
+          }
+          assert reapplied["entity_action"] == "reused"
+          assert reapplied["connection"]["changed"] is False
+          assert observed == expected
+          PY
+          /tmp/brain-ai-wheel/bin/brain-ai --home /tmp/brain-ai-wheel-home init
+          /tmp/brain-ai-wheel/bin/brain-ai --home /tmp/brain-ai-wheel-home tour
+          /tmp/brain-ai-wheel/bin/brain-ai --home /tmp/brain-ai-wheel-home ontology
+      - name: Smoke-test the source distribution
+        run: |
+          sdist="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          test -n "$sdist"
+          python -m venv /tmp/brain-ai-sdist
+          /tmp/brain-ai-sdist/bin/python -m pip install "${sdist}[mcp]"
+          mkdir -p /tmp/brain-ai-sdist-project
+          cd /tmp/brain-ai-sdist-project
+          /tmp/brain-ai-sdist/bin/brain-ai \
+            setup claude-code --entity sdist-smoke --mode tools --json \
+            > /tmp/brain-ai-sdist-preview.json
+          test ! -e .brain-ai
+          test ! -e .mcp.json
+          /tmp/brain-ai-sdist/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+
+          preview = json.loads(Path("/tmp/brain-ai-sdist-preview.json").read_text())
+          project = Path("/tmp/brain-ai-sdist-project")
+          assert preview["status"] == "preview"
+          assert preview["applied"] is False
+          assert preview["mode"] == "tools"
+          assert preview["home"] == str((project / ".brain-ai").resolve())
+          assert preview["doctor"] is None
+          PY
+          /tmp/brain-ai-sdist/bin/brain-ai \
+            setup claude-code --entity sdist-smoke --mode tools --apply --json \
+            > /tmp/brain-ai-sdist-applied.json
+          /tmp/brain-ai-sdist/bin/python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          project = Path("/tmp/brain-ai-sdist-project")
+          applied = json.loads(Path("/tmp/brain-ai-sdist-applied.json").read_text())
+          assert applied["status"] == "configured"
+          assert applied["entity_action"] == "created"
+          assert applied["doctor"]["ready"] is True
+          assert applied["doctor"]["connection"]["configured"] is True
+          assert applied["doctor"]["mcp_support_installed"] is True
+          config = project / ".mcp.json"
+          assert config.is_file()
+          Path("/tmp/brain-ai-sdist-config.sha256").write_text(
+              hashlib.sha256(config.read_bytes()).hexdigest()
+          )
+          PY
+          /tmp/brain-ai-sdist/bin/brain-ai \
+            setup claude-code --entity sdist-smoke --mode tools --apply --json \
+            > /tmp/brain-ai-sdist-reapplied.json
+          /tmp/brain-ai-sdist/bin/python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          project = Path("/tmp/brain-ai-sdist-project")
+          reapplied = json.loads(Path("/tmp/brain-ai-sdist-reapplied.json").read_text())
+          expected = Path("/tmp/brain-ai-sdist-config.sha256").read_text()
+          observed = hashlib.sha256((project / ".mcp.json").read_bytes()).hexdigest()
+          assert reapplied["entity_action"] == "reused"
+          assert reapplied["connection"]["changed"] is False
+          assert observed == expected
+          PY
+          /tmp/brain-ai-sdist/bin/brain-ai --home /tmp/brain-ai-sdist-home init
+          /tmp/brain-ai-sdist/bin/brain-ai --home /tmp/brain-ai-sdist-home tour
+          /tmp/brain-ai-sdist/bin/brain-ai --home /tmp/brain-ai-sdist-home ontology
+      - name: Upload verified distributions
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: python-package-distributions
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish verified artifacts to PyPI
+    needs: build-and-verify
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/brain-ai-memory
+    permissions:
+      id-token: write
+    steps:
+      - name: Download verified distributions
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1

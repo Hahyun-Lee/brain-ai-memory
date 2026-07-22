@@ -18,6 +18,7 @@ DEFAULT_CONFIG = {
         "capture_raw_prompt": False,
         "capture_raw_tool_output": False,
         "auto_store_artifact_events": True,
+        "monitor_import_sources": True,
     },
     "semantic": {
         "backend": "local",

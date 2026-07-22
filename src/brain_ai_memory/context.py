@@ -140,9 +140,49 @@ class ContextAssembler:
             tuple(route),
         )
 
-    def for_session(self, entity: str, handoff: dict | None = None) -> ContextCapsule:
+    @staticmethod
+    def _excluded(
+        exclusions: dict[str, set[str]],
+        memory_type: str,
+        item: dict,
+    ) -> bool:
+        identifier = str(item.get("id") or item.get("key") or "")
+        return bool(identifier and identifier in exclusions.get(memory_type, set()))
+
+    @staticmethod
+    def _freshness_records(notices: Iterable[dict]) -> list[tuple[str, dict, Any]]:
+        records: list[tuple[str, dict, Any]] = []
+        for notice in notices:
+            records.append(
+                (
+                    "source-freshness",
+                    {
+                        "id": notice["id"],
+                        "source": "approved-import-source-monitor",
+                    },
+                    {
+                        "path": notice["path"],
+                        "status": notice["status"],
+                        "stale_records_suppressed": notice["stale_records_suppressed"],
+                        "review_candidates": notice["review_candidates"],
+                        "audit_id": notice.get("audit_id"),
+                        "next": notice.get("next"),
+                    },
+                )
+            )
+        return records
+
+    def for_session(
+        self,
+        entity: str,
+        handoff: dict | None = None,
+        *,
+        exclusions: dict[str, set[str]] | None = None,
+        freshness_notices: Iterable[dict] = (),
+    ) -> ContextCapsule:
         record_entity = self.runtime.store.get_entity(entity)
         entity_id = record_entity["id"]
+        excluded = exclusions or {}
         records: list[tuple[str, dict, Any]] = []
         if handoff and handoff.get("status") != "not_found":
             records.append(
@@ -156,12 +196,17 @@ class ContextAssembler:
                     },
                 )
             )
+        records.extend(self._freshness_records(freshness_notices))
         states = sorted(
             self.runtime.store.states(entity_id, include_global=False),
             key=lambda item: item.get("updated_at", ""),
             reverse=True,
         )
-        for item in states[:20]:
+        current_states = [
+            item for item in states
+            if not self._excluded(excluded, "state", item)
+        ]
+        for item in current_states[:20]:
             records.append(
                 (
                     "exact-state",
@@ -174,7 +219,10 @@ class ContextAssembler:
             for item in self.runtime.store.rules()
             if not item.get("entity_ids") or entity_id in item.get("entity_ids", [])
         ]
-        for item in reversed(rules[-12:]):
+        current_rules = [
+            item for item in rules if not self._excluded(excluded, "rule", item)
+        ]
+        for item in reversed(current_rules[-12:]):
             records.append(
                 ("procedural-rule", item, {"effect": item["effect"], "reason": item["reason"]})
             )
@@ -183,21 +231,39 @@ class ContextAssembler:
             key=lambda item: item.get("updated_at", item.get("created_at", "")),
             reverse=True,
         )
-        for item in knowledge[:16]:
+        current_knowledge = [
+            item for item in knowledge
+            if not self._excluded(excluded, "semantic", item)
+        ]
+        for item in current_knowledge[:16]:
             records.append(("semantic", item, item["text"]))
         episodes = [
             item
             for item in self.runtime.store.events()
             if entity_id in item.get("entity_ids", [])
         ]
-        for item in reversed(episodes[-8:]):
+        current_episodes = [
+            item for item in episodes
+            if not self._excluded(excluded, "episodic", item)
+        ]
+        for item in reversed(current_episodes[-8:]):
             records.append(("episodic", item, item["text"]))
         return self._assemble(record_entity, records)
 
-    def for_query(self, query: str, entity: str) -> ContextCapsule:
+    def for_query(
+        self,
+        query: str,
+        entity: str,
+        *,
+        exclusions: dict[str, set[str]] | None = None,
+        freshness_notices: Iterable[dict] = (),
+    ) -> ContextCapsule:
         recalled = self.runtime.recall(query, entity=entity)
         record_entity = self.runtime.store.get_entity(entity)
-        records: list[tuple[str, dict, Any]] = []
+        excluded = exclusions or {}
+        records: list[tuple[str, dict, Any]] = self._freshness_records(
+            freshness_notices
+        )
         kinds = {
             "IPS": "exact-state",
             "BG": "procedural-rule",
@@ -206,6 +272,11 @@ class ContextAssembler:
         }
         for component in ("IPS", "BG", "ATL", "HC"):
             for item in recalled["by_component"].get(component, []):
+                memory_type = {
+                    "IPS": "state", "BG": "rule", "ATL": "semantic", "HC": "episodic"
+                }[component]
+                if self._excluded(excluded, memory_type, item):
+                    continue
                 if component == "IPS":
                     value = {"key": item["key"], "value": item["value"]}
                 elif component == "BG":

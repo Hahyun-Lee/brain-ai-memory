@@ -6,6 +6,7 @@ import re
 import subprocess
 import time
 from pathlib import Path
+from typing import Iterable
 
 from . import __version__
 from .adapters import build_semantic_adapter
@@ -69,7 +70,13 @@ class BrainAIRuntime:
         components.extend(["ATL", "HC"])
         return list(dict.fromkeys(components))
 
-    def gate(self, action: str | None, *, entity: str | None = None) -> dict:
+    def gate(
+        self,
+        action: str | None,
+        *,
+        entity: str | None = None,
+        exclude_rule_ids: Iterable[str] = (),
+    ) -> dict:
         if not action:
             return {"allowed": True, "effect": "allow", "reason": "no proposed action", "rule_id": None}
         if len(action.encode("utf-8", errors="surrogatepass")) > MAX_RULE_ACTION_BYTES:
@@ -98,8 +105,11 @@ class BrainAIRuntime:
                 ),
                 "rule_id": rule["id"],
             }
+        excluded_rules = {str(rule_id) for rule_id in exclude_rule_ids}
         applicable_rules = []
         for rule in self.store.rules():
+            if rule["id"] in excluded_rules:
+                continue
             if rule.get("entity_ids"):
                 if not entity_id or entity_id not in rule["entity_ids"]:
                     continue
