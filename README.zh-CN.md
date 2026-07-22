@@ -63,7 +63,7 @@ Optional action checks
 这个 tour 只证明本地软件可以运行；它不会导入你的文件，也不代表代理已经
 开始自动使用记忆。
 
-**已验证内容：**完整的 135 个测试在 Python 3.12 上运行；核心 runtime 和
+**已验证内容：**完整的 137 个测试在 Python 3.12 上运行；核心 runtime 和
 adoption workflow 也在 Python 3.10、3.11 上运行。clean wheel 测试覆盖真实的
 进程重启与恢复、子进程 host hook 设置、自动 checkpoint/resume，以及 20/20
 component contracts。这是安装与集成证据，不是“能让 LLM 回答得更好”的声明。
@@ -290,9 +290,9 @@ brain-ai resume --entity my-project
 规则、精确状态和 action check 分开，让每类失败都能单独调试。你也可以只使用
 这些软件约定，不采用脑区名称。详见 [mapping 及其边界](docs/01-the-mapping.md)。
 
-当前测试包括 43 个 adoption-workflow、27 个 runtime、5 个 ablation、1 个 packaged
-restart/resume、23 个 host-integration、32 个 automatic-loop，以及 4 个 storage
-durability/concurrency 测试，共 135 个。它们还没有证明真实 LLM agent 的端到端答案
+当前测试包括 44 个 adoption-workflow、27 个 runtime、5 个 ablation、1 个 packaged
+restart/resume、23 个 host-integration、33 个 automatic-loop，以及 4 个 storage
+durability/concurrency 测试，共 137 个。它们还没有证明真实 LLM agent 的端到端答案
 优于 RAG 或更简单的 memory system。
 
 ## 从你已经遇到的问题开始

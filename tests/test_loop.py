@@ -319,6 +319,68 @@ class AutonomousLoopTest(unittest.TestCase):
         self.assertEqual(session["dirty_generation"], 1)
         self.assertNotIn("SECRET-OUTPUT", metadata)
 
+    def test_post_tool_refresh_failure_keeps_capture_and_cached_controls(self):
+        stale = self.runtime.store.put_knowledge(
+            "Atlas deploys on Friday.",
+            source="approved-import",
+            entities=[self.atlas["id"]],
+        )
+        coordinator = self.coordinator()
+        coordinator.ledger.replace_source_freshness(
+            {
+                "entity_id": self.atlas["id"],
+                "sources": [
+                    {
+                        "path": str(self.root / "MEMORY.md"),
+                        "display_path": "MEMORY.md",
+                        "status": "review-required",
+                        "applied_sha256": "old",
+                        "observed_sha256": "new",
+                        "stale_targets": {
+                            "semantic": [stale["id"]],
+                            "episodic": [],
+                            "rule": [],
+                            "state": [],
+                        },
+                        "candidate_count": 1,
+                        "audit_id": "audit_changed_source",
+                        "checked_at": "2026-07-22T00:00:00Z",
+                    }
+                ],
+            }
+        )
+        payload = self.event(
+            "PostToolUse",
+            turn="t-refresh-failure",
+            tool_name="Edit",
+            tool_use_id="edit-refresh-failure",
+            tool_input={"file_path": str(self.root / "notes.md")},
+            tool_response={"ok": True},
+        )
+
+        with mock.patch.object(
+            coordinator,
+            "_refresh_source_freshness",
+            side_effect=OSError("source refresh failed"),
+        ):
+            result = coordinator.handle(payload)
+
+        self.assertIn("candidate_id", result)
+        self.assertIn(
+            "cached freshness controls remain active",
+            result["system_message"],
+        )
+        exclusions, notices = coordinator._freshness_context()
+        self.assertIn(stale["id"], exclusions["semantic"])
+        self.assertEqual(notices[0]["status"], "review-required")
+        with self.runtime.store.connect() as conn:
+            event = conn.execute(
+                """SELECT status, error FROM loop_events
+                WHERE event_name='PostToolUse'"""
+            ).fetchone()
+        self.assertEqual((event["status"], event["error"]), ("completed", None))
+        self.assertEqual(len(self.runtime.store.events()), 1)
+
     def test_concurrent_duplicate_edit_mirrors_one_episode(self):
         payload = self.event(
             "PostToolUse",

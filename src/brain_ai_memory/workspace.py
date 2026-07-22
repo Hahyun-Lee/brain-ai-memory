@@ -697,7 +697,10 @@ def inspect_source_freshness(
     whose exact fragment is no longer present, and optionally materializes an
     ordinary review audit for the new source version.
     """
-    project_root = Path(root).expanduser().resolve(strict=True)
+    try:
+        project_root = Path(root).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("source freshness root must be a directory") from exc
     if not project_root.is_dir():
         raise ValueError("source freshness root must be a directory")
     record_entity = store.get_entity(entity)

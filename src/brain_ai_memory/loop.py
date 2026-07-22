@@ -1366,9 +1366,21 @@ class LoopCoordinator:
             # stable record id under the JSONL lock on every mirror attempt.
             self.runtime.store.append_event_once(event_record)
             self.ledger.mark_candidate_mirrored(candidate["id"])
-            freshness = self._refresh_source_freshness()
+            refresh_error = None
+            try:
+                freshness = self._refresh_source_freshness()
+            except Exception as exc:
+                refresh_error = _error_reference(exc)
+                freshness = self.ledger.source_freshness(
+                    entity_id=self.entity["id"]
+                )
             result = {"candidate_id": candidate["id"]}
-            if freshness["attention_count"]:
+            if refresh_error:
+                result["system_message"] = (
+                    "Brain-AI Memory could not refresh one source snapshot; cached "
+                    f"freshness controls remain active (error ref: {refresh_error})."
+                )
+            elif freshness["attention_count"]:
                 stale_count = sum(
                     len(values)
                     for values in freshness["stale_targets"].values()

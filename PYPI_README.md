@@ -104,7 +104,7 @@ make an explicit review decision. The complete workflow is documented in the
 
 ## Evidence and limits
 
-The public suite contains 135 deterministic tests covering the runtime,
+The public suite contains 137 deterministic tests covering the runtime,
 adoption workflow, host connections, automatic loop, packaged restart/resume,
 component contracts, and storage concurrency. Wheel and source distributions
 are built and smoke-tested before publication.

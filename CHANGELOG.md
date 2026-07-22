@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- normalize missing or unusable source-freshness roots to the documented
+  `ValueError` contract; and
+- preserve successful post-tool artifact captures when source refresh fails,
+  keep the cached freshness controls active, and report the bounded diagnostic
+  without marking the loop event unhealthy.
+
+### Verification
+
+- expand the public suite to 137 tests with regressions for both failure paths.
+
 ## 0.7.0 — 2026-07-22
 
 ### Memory lifecycle

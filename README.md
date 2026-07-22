@@ -70,7 +70,7 @@ Optional action checks
 The tour proves the local package runs; it does not import your files or show
 autonomous agent behavior.
 
-**What is tested:** the complete 135-test suite runs on Python 3.12; the
+**What is tested:** the complete 137-test suite runs on Python 3.12; the
 core runtime and adoption workflow also run on Python 3.10 and 3.11. Clean-wheel
 checks cover a real process restart/resume, subprocess host-hook setup,
 automatic checkpoint/resume, and 20/20 component contracts. This is integration
@@ -375,9 +375,9 @@ episodes, facts, rules, exact state, and action checks so that each failure can
 be debugged on its own. You can use the contracts without the brain labels.
 See the [mapping and its limits](docs/01-the-mapping.md).
 
-The current suite covers 43 adoption-workflow cases, 27 runtime cases, 5
-ablation cases, 1 packaged restart/resume case, 23 host-integration cases, 32
-automatic-loop cases, and 4 storage durability and concurrency cases (135
+The current suite covers 44 adoption-workflow cases, 27 runtime cases, 5
+ablation cases, 1 packaged restart/resume case, 23 host-integration cases, 33
+automatic-loop cases, and 4 storage durability and concurrency cases (137
 total).
 These tests do not yet show better end-to-end LLM answers than RAG or a simpler
 memory system. See the [evidence and limitations](#evidence-status).

@@ -125,6 +125,21 @@ class WorkspaceWorkflowTest(unittest.TestCase):
             all(not values for values in result["sources"][0]["stale_targets"].values())
         )
 
+    def test_source_freshness_rejects_missing_root_with_value_error(self):
+        runtime = BrainAIRuntime(self.home)
+        runtime.store.put_entity("Atlas", entity_type="project")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "source freshness root must be a directory",
+        ):
+            inspect_source_freshness(
+                self.home,
+                runtime.store,
+                entity="Atlas",
+                root=self.root / "missing-project",
+            )
+
     def test_top_level_version_is_pure(self):
         stdout = io.StringIO()
         stderr = io.StringIO()
