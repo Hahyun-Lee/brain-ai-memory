@@ -13,11 +13,11 @@ later approved decision changes the release day to Thursday.
 
 | Reader's question | Memory operation | What still needs judgment |
 |---|---|---|
-| Which project owns this decision? | Bind records to an entity; use a project-locked connection. | Select the intended project when configuring the connection. |
+| Which project owns this decision? | Give records a project ID (entity); lock the connection to that project. | Select the intended project when configuring the connection. |
 | What supported Friday? | Inspect the imported source path, line span and hashes. | Decide whether that source is authoritative. |
-| Is Friday still current? | Explicitly supersede the old semantic record; retain its history. | Confirm that Thursday replaces the same decision. |
-| What is the exact current value? | Store and query a scoped state key. | Save the approved value; use the release's supported query route. |
-| What should happen next? | Write a scoped handoff and resume it in the next session. | Supply the summary and concrete next action. |
+| Is Friday still current? | Mark Friday as replaced and keep it in history (`supersede`). | Confirm that Thursday replaces the same decision. |
+| What is the exact current value? | Store and query a named project value (state key), outside prose. | Save the approved value; use the release's supported query route. |
+| What should happen next? | Save a project summary and next action (`checkpoint`) for the next session. | Supply the summary and concrete next action. |
 
 Saving a new semantic note does not automatically supersede an older one.
 Reading a document does not save its facts. A checkpoint does not replace the

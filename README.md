@@ -1,15 +1,16 @@
 **English** | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
-# Brain-AI Memory
+# Brain-AI Memory — Local, versioned memory for AI agents
 
-**Project memory you can inspect, correct, and carry into the next session.**
+**Help your next AI chat start from the project's current decisions.**
 
-Keep decisions, exact values, corrections, and next actions in a local store
-that Codex or Claude Code can query. Bind records to a project, replace an old
-fact with an explicit correction, and retain the source history. Import
-selected entries from an existing `MEMORY.md` without rewriting it.
+Brain-AI Memory stores project memory for Codex and Claude Code on your computer.
+Replace “release on Friday” with “release on Thursday,” and Thursday becomes
+current for that project while the old decision stays in the history. Connect
+it through MCP or import selected facts from `MEMORY.md` without changing the
+original file.
 
-**Local Python runtime · SQLite and BM25 · Python 3.10+ · MIT**
+**Local storage · Project scope · Change history · Python 3.10+ · MIT**
 
 [![CI](https://github.com/Hahyun-Lee/brain-ai-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/Hahyun-Lee/brain-ai-memory/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Hahyun-Lee/brain-ai-memory)](https://github.com/Hahyun-Lee/brain-ai-memory/releases/latest)
@@ -52,16 +53,16 @@ installed MCP runtime.
 
 | Need | Explicit operation |
 |---|---|
-| Know which project owns a record | Entity bindings and a project-locked connection. |
-| Replace a fact without losing its history | Explicit supersession and source provenance. |
-| Preserve an exact value | A scoped state key, separate from prose. |
-| Notice changed support for an imported fact | Source-fragment checks in the optional session loop and a review path. |
-| Continue the agreed work | Project-scoped checkpoint and resume. |
+| Know which project owns a record | Keep a project ID and lock the connection to it. |
+| Replace a fact without losing its history | Mark the old fact as replaced and keep its source. |
+| Preserve an exact value | Store a named value separately from ordinary notes. |
+| Notice changed support for an imported fact | Check for changed source lines in the optional loop, then require review. |
+| Continue the agreed work | Save a project summary and next steps to resume. |
 
-These operations support **metacognition: checking the memory being used and
-recording an authorized correction**. The runtime provides scope and stored
-status; the optional loop checks supported source changes. The user or
-integrating agent still decides what is true and what should replace it. See
+**Metacognition here means checking a memory before using it.** The agent can
+check the project, the current version and the source. Source-change checks run
+in the optional session loop. A person or agent still decides whether the
+information is true and which correction to save. See
 [memory self-monitoring](docs/memory-self-monitoring.md) for the mechanism and
 its limits.
 
