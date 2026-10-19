@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brain-AI Memory"
+  short_description: "Save and recall project memory through an external MCP"
+  default_prompt: "Use $brain-ai-memory to save a confirmed project decision or recall the context for this work."
